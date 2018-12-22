@@ -1,4 +1,4 @@
-package models
+package cigExchange
 
 import (
     "fmt"
@@ -11,11 +11,6 @@ import (
 
 var db *gorm.DB
 var redisD *redis.Client
-
-type models struct {
-    db *gorm.DB
-}
-
 
 func init() {
 
