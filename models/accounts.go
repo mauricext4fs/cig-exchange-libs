@@ -2,7 +2,6 @@ package models
 
 import (
 	"cig-exchange-libs"
-	u "cig-exchange-libs/utils"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/jinzhu/gorm"
 	"golang.org/x/crypto/bcrypt"
@@ -30,11 +29,11 @@ type Account struct {
 func (account *Account) Validate() (map[string]interface{}, bool) {
 
 	if !strings.Contains(account.Email, "@") {
-		return u.Message(false, "Email address is required"), false
+		return cigExchange.Message(false, "Email address is required"), false
 	}
 
 	if len(account.Password) < 6 {
-		return u.Message(false, "Password is required"), false
+		return cigExchange.Message(false, "Password is required"), false
 	}
 
 	//Email must be unique
@@ -43,13 +42,13 @@ func (account *Account) Validate() (map[string]interface{}, bool) {
 	//check for errors and duplicate emails
 	err := cigExchange.GetDB().Table("accounts").Where("email = ?", account.Email).First(temp).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
-		return u.Message(false, "Connection error. Please retry"), false
+		return cigExchange.Message(false, "Connection error. Please retry"), false
 	}
 	if temp.Email != "" {
-		return u.Message(false, "Email address already in use by another user."), false
+		return cigExchange.Message(false, "Email address already in use by another user."), false
 	}
 
-	return u.Message(false, "Requirement passed"), true
+	return cigExchange.Message(false, "Requirement passed"), true
 }
 
 func (account *Account) Create() map[string]interface{} {
@@ -64,7 +63,7 @@ func (account *Account) Create() map[string]interface{} {
 	cigExchange.GetDB().Create(account)
 
 	if account.ID <= 0 {
-		return u.Message(false, "Failed to create account, connection error.")
+		return cigExchange.Message(false, "Failed to create account, connection error.")
 	}
 
 	//Create new JWT token for the newly registered account
@@ -75,7 +74,7 @@ func (account *Account) Create() map[string]interface{} {
 
 	account.Password = "" //delete password
 
-	response := u.Message(true, "Account has been created")
+	response := cigExchange.Message(true, "Account has been created")
 	response["account"] = account
 	return response
 }
@@ -86,14 +85,14 @@ func Login(email, password string) map[string]interface{} {
 	err := cigExchange.GetDB().Table("accounts").Where("email = ?", email).First(account).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return u.Message(false, "Email address not found")
+			return cigExchange.Message(false, "Email address not found")
 		}
-		return u.Message(false, "Connection error. Please retry")
+		return cigExchange.Message(false, "Connection error. Please retry")
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(account.Password), []byte(password))
 	if err != nil && err == bcrypt.ErrMismatchedHashAndPassword { //Password does not match!
-		return u.Message(false, "Invalid login credentials. Please try again")
+		return cigExchange.Message(false, "Invalid login credentials. Please try again")
 	}
 	//Worked! Logged In
 	account.Password = ""
@@ -104,7 +103,7 @@ func Login(email, password string) map[string]interface{} {
 	tokenString, _ := token.SignedString([]byte(os.Getenv("token_password")))
 	account.Token = tokenString //Store the token in the response
 
-	resp := u.Message(true, "Logged In")
+	resp := cigExchange.Message(true, "Logged In")
 	resp["account"] = account
 	return resp
 }
