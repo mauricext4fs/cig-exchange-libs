@@ -23,6 +23,10 @@ type Account struct {
 	Token string `json:"token" sql:"-"`
 }
 
+type Code struct {
+	Code string
+}
+
 //Validate incoming user details...
 func (account *Account) Validate() (map[string]interface{}, bool) {
 
