@@ -4,7 +4,6 @@ import (
 	"cig-exchange-libs"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/jinzhu/gorm"
-	"golang.org/x/crypto/bcrypt"
 	"os"
 	"strings"
 )
@@ -20,9 +19,8 @@ type Token struct {
 //a struct to rep user account
 type Account struct {
 	gorm.Model
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Token    string `json:"token" sql:"-"`
+	Email string `json:"email"`
+	Token string `json:"token" sql:"-"`
 }
 
 //Validate incoming user details...
@@ -30,10 +28,6 @@ func (account *Account) Validate() (map[string]interface{}, bool) {
 
 	if !strings.Contains(account.Email, "@") {
 		return cigExchange.Message(false, "Email address is required"), false
-	}
-
-	if len(account.Password) < 6 {
-		return cigExchange.Message(false, "Password is required"), false
 	}
 
 	//Email must be unique
@@ -57,9 +51,6 @@ func (account *Account) Create() map[string]interface{} {
 		return resp
 	}
 
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(account.Password), bcrypt.DefaultCost)
-	account.Password = string(hashedPassword)
-
 	cigExchange.GetDB().Create(account)
 
 	if account.ID <= 0 {
@@ -72,14 +63,12 @@ func (account *Account) Create() map[string]interface{} {
 	tokenString, _ := token.SignedString([]byte(os.Getenv("token_password")))
 	account.Token = tokenString
 
-	account.Password = "" //delete password
-
 	response := cigExchange.Message(true, "Account has been created")
 	response["account"] = account
 	return response
 }
 
-func Login(email, password string) map[string]interface{} {
+func Login(email string) map[string]interface{} {
 
 	account := &Account{}
 	err := cigExchange.GetDB().Table("accounts").Where("email = ?", email).First(account).Error
@@ -90,12 +79,7 @@ func Login(email, password string) map[string]interface{} {
 		return cigExchange.Message(false, "Connection error. Please retry")
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(account.Password), []byte(password))
-	if err != nil && err == bcrypt.ErrMismatchedHashAndPassword { //Password does not match!
-		return cigExchange.Message(false, "Invalid login credentials. Please try again")
-	}
 	//Worked! Logged In
-	account.Password = ""
 
 	//Create JWT token
 	tk := &Token{UserId: account.ID}
@@ -116,6 +100,5 @@ func GetUser(u uint) *Account {
 		return nil
 	}
 
-	acc.Password = ""
 	return acc
 }
