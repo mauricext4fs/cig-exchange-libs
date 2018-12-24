@@ -58,7 +58,7 @@ func init() {
 	if err != nil {
 		fmt.Print(err)
 	}
-	fmt.Println(pong, err)
+	fmt.Println(pong)
 	redisD = client
 }
 
