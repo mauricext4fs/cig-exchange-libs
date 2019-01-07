@@ -1,6 +1,7 @@
 package cigExchange
 
 import (
+	"cig-exchange-libs/twilio"
 	"fmt"
 	"os"
 	"time"
@@ -13,6 +14,7 @@ import (
 
 var db *gorm.DB
 var redisD *redis.Client
+var twilioOTP *twilio.OTP
 
 func init() {
 
@@ -20,6 +22,10 @@ func init() {
 	if e != nil {
 		fmt.Print(e)
 	}
+
+	// Twilio Init
+	twilioAPIKey := os.Getenv("twilio_apikey")
+	twilioOTP = twilio.NewOTP(twilioAPIKey)
 
 	// PostgreSQL Init
 	username := os.Getenv("db_user")
@@ -70,4 +76,9 @@ func GetDB() *gorm.DB {
 // GetRedis returns a redis client object singletone
 func GetRedis() *redis.Client {
 	return redisD
+}
+
+// GetTwilio returns a wilio OTP object singletone
+func GetTwilio() *twilio.OTP {
+	return twilioOTP
 }
