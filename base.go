@@ -10,11 +10,13 @@ import (
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
 	"github.com/joho/godotenv"
+	"github.com/keighl/mandrill"
 )
 
 var db *gorm.DB
 var redisD *redis.Client
 var twilioOTP *twilio.OTP
+var mandrillClient *mandrill.Client
 
 func init() {
 
@@ -26,6 +28,10 @@ func init() {
 	// Twilio Init
 	twilioAPIKey := os.Getenv("twilio_apikey")
 	twilioOTP = twilio.NewOTP(twilioAPIKey)
+
+	// Mandrill Init
+	mandrillKey := os.Getenv("MANDRILL_KEY")
+	mandrillClient = mandrill.ClientWithKey(mandrillKey)
 
 	// PostgreSQL Init
 	username := os.Getenv("db_user")
@@ -81,4 +87,9 @@ func GetRedis() *redis.Client {
 // GetTwilio returns a wilio OTP object singletone
 func GetTwilio() *twilio.OTP {
 	return twilioOTP
+}
+
+// GetMandrill returns a mandrill object singletone
+func GetMandrill() *mandrill.Client {
+	return mandrillClient
 }
