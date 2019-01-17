@@ -40,7 +40,7 @@ func init() {
 	dbHost := os.Getenv("db_host")
 	dbPort := os.Getenv("db_port")
 
-	dbURI := fmt.Sprintf("host=%s user=%s dbname=%s sslmode=disable password=%s port=%s", dbHost, username, dbName, password, dbPort)
+	dbURI := fmt.Sprintf("host=%s user=%s dbname=%s sslmode=require password=%s port=%s", dbHost, username, dbName, password, dbPort)
 	fmt.Println(dbURI)
 
 	conn, err := gorm.Open("postgres", dbURI)
