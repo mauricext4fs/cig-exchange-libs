@@ -2,107 +2,149 @@ package models
 
 import (
 	"cig-exchange-libs"
-	"github.com/dgrijalva/jwt-go"
-	"github.com/jinzhu/gorm"
-	"os"
+	"fmt"
 	"strings"
+	"time"
+
+	"github.com/jinzhu/gorm"
+	uuid "github.com/satori/go.uuid"
 )
 
-/*
-JWT claims struct
-*/
-type Token struct {
-	UserId uint
-	jwt.StandardClaims
-}
-
-//a struct to rep user account
+// Account is a struct to represent an offering
 type Account struct {
-	gorm.Model
-	Email string `json:"email"`
-	Token string `json:"token" sql:"-"`
+	ID             string     `json:"id" gorm:"column:id;primary_key"`
+	FirstName      string     `json:"first_name" gorm:"column:first_name"`
+	LastName       string     `json:"last_name" gorm:"column:last_name"`
+	ReferenceKey   string     `json:"reference_key" gorm:"column:reference_key"`
+	Email          string     `json:"email" gorm:"column:email"`
+	MobileCode     string     `json:"mobile_code" gorm:"column:mobile_code"`
+	MobileNumber   string     `json:"mobile_number" gorm:"column:mobile_number"`
+	VerifiedEmail  bool       `json:"-" gorm:"column:verified_email"`
+	VerifiedMobile bool       `json:"-" gorm:"column:verified_mobile"`
+	CreatedAt      time.Time  `json:"-" gorm:"column:created_at"`
+	UpdatedAt      time.Time  `json:"-" gorm:"column:updated_at"`
+	DeletedAt      *time.Time `json:"-" gorm:"column:deleted_at"`
 }
 
-type Code struct {
-	Code string
+// BeforeCreate generates new unique UUIDs for new db records
+func (account *Account) BeforeCreate(scope *gorm.Scope) error {
+
+	UUID, err := uuid.NewV4()
+	if err != nil {
+		return err
+	}
+	scope.SetColumn("ID", UUID.String())
+
+	return nil
 }
 
-//Validate incoming user details...
-func (account *Account) Validate() (map[string]interface{}, bool) {
+// Create inserts new account object into db
+func (account *Account) Create() error {
 
-	if !strings.Contains(account.Email, "@") {
-		return cigExchange.Message(false, "Email address is required"), false
+	// invalidate the uuid
+	account.ID = ""
+
+	account.trimFields()
+
+	reqError := fmt.Errorf("Required field validation failed: %#v", account)
+	if len(account.FirstName) == 0 {
+		return reqError
+	} else if len(account.LastName) == 0 {
+		return reqError
+	} else if len(account.Email) == 0 {
+		return reqError
+	} else if len(account.ReferenceKey) == 0 {
+		return reqError
+	} else if len(account.MobileCode) == 0 {
+		return reqError
+	} else if len(account.MobileNumber) == 0 {
+		return reqError
+	} else if !strings.Contains(account.Email, "@") {
+		return reqError
 	}
 
-	//Email must be unique
 	temp := &Account{}
 
-	//check for errors and duplicate emails
-	err := cigExchange.GetDB().Table("accounts").Where("email = ?", account.Email).First(temp).Error
-	if err != nil && err != gorm.ErrRecordNotFound {
-		return cigExchange.Message(false, "Connection error. Please retry"), false
-	}
-	if temp.Email != "" {
-		return cigExchange.Message(false, "Email address already in use by another user."), false
-	}
-
-	return cigExchange.Message(false, "Requirement passed"), true
-}
-
-func (account *Account) Create() map[string]interface{} {
-
-	if resp, ok := account.Validate(); !ok {
-		return resp
-	}
-
-	cigExchange.GetDB().Create(account)
-
-	if account.ID <= 0 {
-		return cigExchange.Message(false, "Failed to create account, connection error.")
-	}
-
-	//Create new JWT token for the newly registered account
-	tk := &Token{UserId: account.ID}
-	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tk)
-	tokenString, _ := token.SignedString([]byte(os.Getenv("token_password")))
-	account.Token = tokenString
-
-	response := cigExchange.Message(true, "Account has been created")
-	response["account"] = account
-	return response
-}
-
-func Login(email string) map[string]interface{} {
-
-	account := &Account{}
-	err := cigExchange.GetDB().Table("accounts").Where("email = ?", email).First(account).Error
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return cigExchange.Message(false, "Email address not found")
+	// check that email is unique
+	db := cigExchange.GetDB().Where("email = ?", account.Email).First(temp)
+	if db.Error != nil {
+		// we expect record not found error here
+		if !db.RecordNotFound() {
+			return fmt.Errorf("Database error: %s", db.Error.Error())
 		}
-		return cigExchange.Message(false, "Connection error. Please retry")
+	} else {
+		return fmt.Errorf("Email already in use by another user")
 	}
 
-	//Worked! Logged In
+	// check that mobile is unique
+	db = cigExchange.GetDB().Where("mobile_code = ? AND mobile_number = ?", account.MobileCode, account.MobileNumber).First(temp)
+	if db.Error != nil {
+		// we expect record not found error here
+		if !db.RecordNotFound() {
+			return fmt.Errorf("Database error: %s", db.Error.Error())
+		}
+	} else {
+		return fmt.Errorf("Mobile already in use by another user")
+	}
 
-	//Create JWT token
-	tk := &Token{UserId: account.ID}
-	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tk)
-	tokenString, _ := token.SignedString([]byte(os.Getenv("token_password")))
-	account.Token = tokenString //Store the token in the response
-
-	resp := cigExchange.Message(true, "Logged In")
-	resp["account"] = account
-	return resp
+	return cigExchange.GetDB().Create(account).Error
 }
 
-func GetUser(u uint) *Account {
+// GetAccount queries a single account from db
+func GetAccount(UUID string) (account *Account, err error) {
 
-	acc := &Account{}
-	cigExchange.GetDB().Table("accounts").Where("id = ?", u).First(acc)
-	if acc.Email == "" { //User not found!
-		return nil
+	account = &Account{}
+	accountWhere := &Account{
+		ID: strings.TrimSpace(UUID),
 	}
+	if len(accountWhere.ID) == 0 {
+		err = fmt.Errorf("GetAccount: empty search criteria")
+		return
+	}
+	err = cigExchange.GetDB().Where(accountWhere).First(account).Error
 
-	return acc
+	return
+}
+
+// GetAccountByEmail queries a single account from db
+func GetAccountByEmail(email string) (account *Account, err error) {
+
+	account = &Account{}
+	accountWhere := &Account{
+		Email: strings.TrimSpace(email),
+	}
+	if len(accountWhere.Email) == 0 {
+		err = fmt.Errorf("GetAccountByEmail: empty search criteria")
+		return
+	}
+	err = cigExchange.GetDB().Where(accountWhere).First(account).Error
+
+	return
+}
+
+// GetAccountByMobile queries a single account from db
+func GetAccountByMobile(code, number string) (account *Account, err error) {
+
+	account = &Account{}
+	accountWhere := &Account{
+		MobileCode:   strings.TrimSpace(code),
+		MobileNumber: strings.TrimSpace(number),
+	}
+	if len(accountWhere.MobileCode) == 0 || len(accountWhere.MobileNumber) == 0 {
+		err = fmt.Errorf("GetAccountByMobile: empty search criteria")
+		return
+	}
+	err = cigExchange.GetDB().Where(accountWhere).First(account).Error
+
+	return
+}
+
+func (account *Account) trimFields() {
+
+	account.FirstName = strings.TrimSpace(account.FirstName)
+	account.LastName = strings.TrimSpace(account.LastName)
+	account.Email = strings.TrimSpace(account.Email)
+	account.ReferenceKey = strings.TrimSpace(account.ReferenceKey)
+	account.MobileCode = strings.TrimSpace(account.MobileCode)
+	account.MobileNumber = strings.TrimSpace(account.MobileNumber)
 }
