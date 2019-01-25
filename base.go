@@ -46,7 +46,7 @@ func init() {
 	conn, err := gorm.Open("postgres", dbURI)
 	if err != nil {
 		fmt.Println(err)
-		reconnectTimeoutSeconds := 5
+		reconnectTimeoutSeconds := 15
 		fmt.Printf("Database container can be still starting... reconnecting in %d seconds\n", reconnectTimeoutSeconds)
 		time.Sleep(time.Second * time.Duration(reconnectTimeoutSeconds))
 		conn, err = gorm.Open("postgres", dbURI)
