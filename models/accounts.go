@@ -15,8 +15,8 @@ type Account struct {
 	ID             string     `json:"id" gorm:"column:id;primary_key"`
 	FirstName      string     `json:"first_name" gorm:"column:first_name"`
 	LastName       string     `json:"last_name" gorm:"column:last_name"`
-	Email          string     `json:"email" gorm:"column:email"`
 	ReferenceKey   string     `json:"reference_key" gorm:"column:reference_key"`
+	Email          string     `json:"email" gorm:"column:email"`
 	MobileCode     string     `json:"mobile_code" gorm:"column:mobile_code"`
 	MobileNumber   string     `json:"mobile_number" gorm:"column:mobile_number"`
 	VerifiedEmail  bool       `json:"-" gorm:"column:verified_email"`
@@ -67,22 +67,24 @@ func (account *Account) Create() error {
 
 	// check that email is unique
 	db := cigExchange.GetDB().Where("email = ?", account.Email).First(temp)
-	if !db.RecordNotFound() {
-		return fmt.Errorf("Email already in use by another user")
-	}
-	// check if database query failed
 	if db.Error != nil {
-		return fmt.Errorf("Database error: %s", db.Error.Error())
+		// we expect record not found error here
+		if !db.RecordNotFound() {
+			return fmt.Errorf("Database error: %s", db.Error.Error())
+		}
+	} else {
+		return fmt.Errorf("Email already in use by another user")
 	}
 
 	// check that mobile is unique
 	db = cigExchange.GetDB().Where("mobile_code = ? AND mobile_number = ?", account.MobileCode, account.MobileNumber).First(temp)
-	if !db.RecordNotFound() {
-		return fmt.Errorf("Mobile already in use by another user")
-	}
-	// check if database query failed
 	if db.Error != nil {
-		return fmt.Errorf("Database error: %s", db.Error.Error())
+		// we expect record not found error here
+		if !db.RecordNotFound() {
+			return fmt.Errorf("Database error: %s", db.Error.Error())
+		}
+	} else {
+		return fmt.Errorf("Mobile already in use by another user")
 	}
 
 	return cigExchange.GetDB().Create(account).Error
