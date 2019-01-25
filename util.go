@@ -2,8 +2,26 @@ package cigExchange
 
 import (
 	"encoding/json"
+	"fmt"
+	"math/rand"
 	"net/http"
 )
+
+const letterBytes = "abcdefghjkmnopqrstuvwxyzABCDEFGHJKMNOPQRSTUVWXYZ234567890"
+
+// RandCode generates random access code for email auth
+func RandCode(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
+
+// GenerateRedisKey generates key for storing email auth access code in redis
+func GenerateRedisKey(UUID string) string {
+	return fmt.Sprintf("%s_signup_key", UUID)
+}
 
 // apiError is a struct representing server error response
 type apiError struct {
