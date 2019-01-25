@@ -3,6 +3,7 @@ package cigExchange
 import (
 	"cig-exchange-libs/twilio"
 	"fmt"
+	"math/rand"
 	"os"
 	"time"
 
@@ -10,19 +11,22 @@ import (
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
 	"github.com/joho/godotenv"
-	"github.com/keighl/mandrill"
+	"github.com/mattbaird/gochimp"
 )
 
 var db *gorm.DB
 var redisD *redis.Client
 var twilioOTP *twilio.OTP
-var mandrillClient *mandrill.Client
+var mandrillClient *gochimp.MandrillAPI
 
 func init() {
 
-	e := godotenv.Load()
-	if e != nil {
-		fmt.Print(e)
+	// Random init
+	rand.Seed(time.Now().UnixNano())
+
+	err := godotenv.Load()
+	if err != nil {
+		fmt.Print(err)
 	}
 
 	// Twilio Init
@@ -31,7 +35,10 @@ func init() {
 
 	// Mandrill Init
 	mandrillKey := os.Getenv("MANDRILL_KEY")
-	mandrillClient = mandrill.ClientWithKey(mandrillKey)
+	mandrillClient, err = gochimp.NewMandrill(mandrillKey)
+	if err != nil {
+		fmt.Print(err)
+	}
 
 	// PostgreSQL Init
 	username := os.Getenv("db_user")
@@ -90,6 +97,6 @@ func GetTwilio() *twilio.OTP {
 }
 
 // GetMandrill returns a mandrill object singletone
-func GetMandrill() *mandrill.Client {
+func GetMandrill() *gochimp.MandrillAPI {
 	return mandrillClient
 }
