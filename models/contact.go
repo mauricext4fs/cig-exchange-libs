@@ -1,72 +1,43 @@
 package models
 
 import (
-	"cig-exchange-libs"
-	"fmt"
+	"time"
+
 	"github.com/jinzhu/gorm"
+	uuid "github.com/satori/go.uuid"
 )
 
+// Contact is a struct to represent a contact
 type Contact struct {
-	gorm.Model
-	Name   string `json:"name"`
-	Phone  string `json:"phone"`
-	UserId uint   `json:"user_id"` //The user that this contact belongs to
+	ID        string     `gorm:"column:id;primary_key"`
+	Level     string     `gorm:"column:level"`
+	Location  string     `gorm:"column:location"`
+	Type      string     `gorm:"column:type"`
+	Subtype   string     `gorm:"column:subtype"`
+	Value1    string     `gorm:"column:value1"`
+	Value2    string     `gorm:"column:value2"`
+	Value3    string     `gorm:"column:value3"`
+	Value4    string     `gorm:"column:value4"`
+	Value5    string     `gorm:"column:value5"`
+	Value6    string     `gorm:"column:value6"`
+	CreatedAt time.Time  `gorm:"column:created_at"`
+	UpdatedAt time.Time  `gorm:"column:updated_at"`
+	DeletedAt *time.Time `gorm:"column:deleted_at"`
 }
 
-/*
- This struct function validate the required parameters sent through the http request body
-
-returns message and true if the requirement is met
-*/
-func (contact *Contact) Validate() (map[string]interface{}, bool) {
-
-	if contact.Name == "" {
-		return cigExchange.Message(false, "Contact name should be on the payload"), false
-	}
-
-	if contact.Phone == "" {
-		return cigExchange.Message(false, "Phone number should be on the payload"), false
-	}
-
-	if contact.UserId <= 0 {
-		return cigExchange.Message(false, "User is not recognized"), false
-	}
-
-	//All the required parameters are present
-	return cigExchange.Message(true, "success"), true
+// TableName returns table name for struct
+func (contact *Contact) TableName() string {
+	return "contact"
 }
 
-func (contact *Contact) Create() map[string]interface{} {
+// BeforeCreate generates new unique UUIDs for new db records
+func (contact *Contact) BeforeCreate(scope *gorm.Scope) error {
 
-	if resp, ok := contact.Validate(); !ok {
-		return resp
-	}
-
-	cigExchange.GetDB().Create(contact)
-
-	resp := cigExchange.Message(true, "success")
-	resp["contact"] = contact
-	return resp
-}
-
-func GetContact(id uint) *Contact {
-
-	contact := &Contact{}
-	err := cigExchange.GetDB().Table("contacts").Where("id = ?", id).First(contact).Error
+	UUID, err := uuid.NewV4()
 	if err != nil {
-		return nil
+		return err
 	}
-	return contact
-}
+	scope.SetColumn("ID", UUID.String())
 
-func GetContacts(user uint) []*Contact {
-
-	contacts := make([]*Contact, 0)
-	err := cigExchange.GetDB().Table("contacts").Where("user_id = ?", user).Find(&contacts).Error
-	if err != nil {
-		fmt.Println(err)
-		return nil
-	}
-
-	return contacts
+	return nil
 }
