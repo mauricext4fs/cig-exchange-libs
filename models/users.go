@@ -3,7 +3,6 @@ package models
 import (
 	"cig-exchange-libs"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -150,13 +149,10 @@ func GetUserByMobile(code, number string) (user *User, err error) {
 		return
 	}
 
-	log.Printf("Search %#v", contWhere)
-
 	err = cigExchange.GetDB().Where(contWhere).First(cont).Error
 	if err != nil {
 		return
 	}
-	log.Printf("%#v", cont)
 
 	user = &User{}
 	userWhere := &User{
