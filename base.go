@@ -30,7 +30,7 @@ func init() {
 	}
 
 	// Twilio Init
-	twilioAPIKey := os.Getenv("twilio_apikey")
+	twilioAPIKey := os.Getenv("TWILIO_APIKEY")
 	twilioOTP = twilio.NewOTP(twilioAPIKey)
 
 	// Mandrill Init
@@ -41,11 +41,11 @@ func init() {
 	}
 
 	// PostgreSQL Init
-	username := os.Getenv("db_user")
-	password := os.Getenv("db_pass")
-	dbName := os.Getenv("db_name")
-	dbHost := os.Getenv("db_host")
-	dbPort := os.Getenv("db_port")
+	username := os.Getenv("DB_USER")
+	password := os.Getenv("DB_PASS")
+	dbName := os.Getenv("DB_NAME")
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
 
 	dbURI := fmt.Sprintf("host=%s user=%s dbname=%s sslmode=require password=%s port=%s", dbHost, username, dbName, password, dbPort)
 	fmt.Println(dbURI)
