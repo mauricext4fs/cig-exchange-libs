@@ -66,8 +66,11 @@ func init() {
 	//db.Debug().AutoMigrate(&Account{}, &Contact{})
 
 	// Redis Init
+
+	redisHost := os.Getenv("REDIS_HOST")
+	redisPort := os.Getenv("REDIS_PORT")
 	client := redis.NewClient(&redis.Options{
-		Addr:     "redis:6379",
+		Addr:     redisHost + ":" + redisPort,
 		Password: "", // no password set
 		DB:       0,  // use default DB
 	})
