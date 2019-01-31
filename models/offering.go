@@ -27,6 +27,11 @@ type Offering struct {
 	DeletedAt   *time.Time     `json:"deleted_at" gorm:"column:deleted_at"`
 }
 
+// TableName returns table name for struct
+func (offering *Offering) TableName() string {
+	return "offering"
+}
+
 // BeforeCreate generates new unique UUIDs for new db records
 func (offering *Offering) BeforeCreate(scope *gorm.Scope) error {
 
@@ -98,8 +103,8 @@ func GetOffering(UUID string) (*Offering, error) {
 	return offering, err
 }
 
-// Getoffering queries all offering objects from db
-func Getoffering() ([]*Offering, error) {
+// GetOfferings queries all offering objects from db
+func GetOfferings() ([]*Offering, error) {
 
 	offering := make([]*Offering, 0)
 	err := cigExchange.GetDB().Model(&Offering{}).Find(&offering).Error
