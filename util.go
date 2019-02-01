@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-const letterBytes = "abcdefghjkmnopqrstuvwxyzABCDEFGHJKMNOPQRSTUVWXYZ234567890"
+const letterBytes = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 
 // RandCode generates random access code for email auth
 func RandCode(n int) string {
