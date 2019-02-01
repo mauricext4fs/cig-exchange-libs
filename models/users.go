@@ -45,7 +45,7 @@ func (user *User) BeforeCreate(scope *gorm.Scope) error {
 }
 
 // Create inserts new user object into db
-func (user *User) Create() error {
+func (user *User) Create(referenceKey string) error {
 
 	// invalidate the uuid
 	user.ID = ""
@@ -91,7 +91,34 @@ func (user *User) Create() error {
 		return fmt.Errorf("Mobile already in use by another user")
 	}
 
-	return cigExchange.GetDB().Create(user).Error
+	org := &Organisation{}
+	// verify organisation reference key if present
+	if len(referenceKey) > 0 {
+
+		orgWhere := &Organisation{
+			ReferenceKey: referenceKey,
+		}
+		err := cigExchange.GetDB().Where(orgWhere).First(org).Error
+		if err != nil {
+			return fmt.Errorf("Database error when loading organisation: %s", db.Error.Error())
+		}
+	}
+
+	err := cigExchange.GetDB().Create(user).Error
+	if err != nil {
+		return err
+	}
+
+	// create organisation link for the user if necessary
+	if len(referenceKey) > 0 {
+		orgUser := &OrganisationUser{
+			UserID:         user.ID,
+			OrganisationID: org.ID,
+		}
+		return cigExchange.GetDB().Create(orgUser).Error
+	}
+
+	return nil
 }
 
 // GetUser queries a single user from db
