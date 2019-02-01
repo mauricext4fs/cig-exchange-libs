@@ -19,7 +19,7 @@ import (
 // Constants defining the active platform
 const (
 	PlatformP2P    = "p2p"
-	PlatformInvest = "invest"
+	PlatformInvest = "trading"
 )
 
 type userResponse struct {
