@@ -16,6 +16,12 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
+// Constants defining the active platform
+const (
+	PlatformP2P    = "p2p"
+	PlatformInvest = "invest"
+)
+
 type userResponse struct {
 	UUID string `json:"uuid"`
 }
@@ -31,16 +37,18 @@ type verificationCodeRequest struct {
 }
 
 // UserRequest is a structure to represent the signup api request
-type UserRequest struct {
+type userRequest struct {
 	Sex              string `json:"sex"`
 	Name             string `json:"name"`
 	LastName         string `json:"lastname"`
 	Email            string `json:"email"`
 	PhoneCountryCode string `json:"phone_country_code"`
 	PhoneNumber      string `json:"phone_number"`
+	ReferenceKey     string `json:"reference_key"`
+	Platform         string `json:"platform"`
 }
 
-func (user *UserRequest) convertRequestToUser() *models.User {
+func (user *userRequest) convertRequestToUser() *models.User {
 	mUser := &models.User{}
 
 	mUser.Sex = user.Sex
@@ -66,13 +74,13 @@ func (resp *userResponse) randomUUID() {
 
 // UserAPI stores site based variables
 type UserAPI struct {
-	Site    string
-	BaseURI string
+	Platform string
+	BaseURI  string
 }
 
 // NewUserAPI creates UserApi instance
-func NewUserAPI(site, baseURI string) *UserAPI {
-	return &UserAPI{Site: site, BaseURI: baseURI}
+func NewUserAPI(platform, baseURI string) *UserAPI {
+	return &UserAPI{Platform: platform, BaseURI: baseURI}
 }
 
 type token struct {
@@ -164,7 +172,8 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 	resp := &userResponse{}
 	resp.randomUUID()
 
-	userReq := &UserRequest{}
+	userReq := &userRequest{}
+
 	// decode user object from request body
 	err := json.NewDecoder(r.Body).Decode(userReq)
 	if err != nil {
@@ -176,8 +185,15 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 
 	user := userReq.convertRequestToUser()
 
+	// P2P users are required to have an organisation reference key
+	if userReq.Platform == PlatformP2P && len(userReq.ReferenceKey) == 0 {
+		fmt.Println("CreateUser: P2P users are required to have a reference key")
+		cigExchange.Respond(w, resp)
+		return
+	}
+
 	// try to create user
-	err = user.Create()
+	err = user.Create(userReq.ReferenceKey)
 	if err != nil {
 		fmt.Println("CreateUser: db Create error:")
 		fmt.Println(err.Error())
@@ -194,7 +210,7 @@ func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	resp := &userResponse{}
 	resp.randomUUID()
 
-	userReq := &UserRequest{}
+	userReq := &userRequest{}
 	// decode user object from request body
 	err := json.NewDecoder(r.Body).Decode(userReq)
 	if err != nil {
