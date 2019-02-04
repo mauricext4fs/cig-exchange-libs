@@ -56,8 +56,8 @@ func (user *userRequest) convertRequestToUser() *models.User {
 	mUser.Name = user.Name
 	mUser.LastName = user.LastName
 
-	mUser.LoginEmail = models.Contact{Type: "email", Level: "primary", Value1: user.Email}
-	mUser.LoginPhone = models.Contact{Type: "phone", Level: "secondary", Value1: user.PhoneCountryCode, Value2: user.PhoneNumber}
+	mUser.LoginEmail = &models.Contact{Type: "email", Level: "primary", Value1: user.Email}
+	mUser.LoginPhone = &models.Contact{Type: "phone", Level: "secondary", Value1: user.PhoneCountryCode, Value2: user.PhoneNumber}
 
 	return mUser
 }
@@ -265,6 +265,10 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 
 	// send code to email or phone number
 	if reqStruct.Type == "phone" {
+		if user.LoginPhone == nil {
+			fmt.Println("SendCode: User doesn't have phone contact")
+			return
+		}
 		twilioClient := cigExchange.GetTwilio()
 		_, err = twilioClient.ReceiveOTP(user.LoginPhone.Value1, user.LoginPhone.Value2)
 		if err != nil {
@@ -272,6 +276,10 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 			fmt.Println(err.Error())
 		}
 	} else if reqStruct.Type == "email" {
+		if user.LoginEmail == nil {
+			fmt.Println("SendCode: User doesn't have email contact")
+			return
+		}
 		rediskey := cigExchange.GenerateRedisKey(reqStruct.UUID)
 		expiration := 5 * time.Minute
 
@@ -314,6 +322,11 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 
 	// verify code
 	if reqStruct.Type == "phone" {
+		if user.LoginPhone == nil {
+			fmt.Println("VerifyCode: User doesn't have phone contact")
+			cigExchange.RespondWithError(w, retCode, retErr)
+			return
+		}
 		twilioClient := cigExchange.GetTwilio()
 		_, err := twilioClient.VerifyOTP(reqStruct.Code, user.LoginPhone.Value1, user.LoginPhone.Value2)
 		if err != nil {
@@ -324,6 +337,11 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 		}
 
 	} else if reqStruct.Type == "email" {
+		if user.LoginEmail == nil {
+			fmt.Println("VerifyCode: User doesn't have email contact")
+			cigExchange.RespondWithError(w, retCode, retErr)
+			return
+		}
 		rediskey := cigExchange.GenerateRedisKey(reqStruct.UUID)
 
 		redisCmd := cigExchange.GetRedis().Get(rediskey)
@@ -340,6 +358,16 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 		}
 	} else {
 		fmt.Println("VerifyCode: Error: unsupported otp type")
+		cigExchange.RespondWithError(w, retCode, retErr)
+		return
+	}
+
+	// user is verified
+	user.Verified = 1
+	err = user.Save()
+	if err != nil {
+		fmt.Println("VerifyCode: db Save error:")
+		fmt.Println(err.Error())
 		cigExchange.RespondWithError(w, retCode, retErr)
 		return
 	}

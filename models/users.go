@@ -17,10 +17,10 @@ type User struct {
 	Role           string     `gorm:"column:role"`
 	Name           string     `gorm:"column:name"`
 	LastName       string     `gorm:"column:lastname"`
-	LoginEmail     Contact    `gorm:"foreignkey:LoginEmailUUID"`
-	LoginEmailUUID string     `gorm:"column:login_email"`
-	LoginPhone     Contact    `gorm:"foreignkey:LoginPhoneUUID"`
-	LoginPhoneUUID string     `gorm:"column:login_phone"`
+	LoginEmail     *Contact   `gorm:"foreignkey:LoginEmailUUID;association_foreignkey:ID"`
+	LoginEmailUUID *string    `gorm:"column:login_email"`
+	LoginPhone     *Contact   `gorm:"foreignkey:LoginPhoneUUID;association_foreignkey:ID"`
+	LoginPhoneUUID *string    `gorm:"column:login_phone"`
 	Verified       int64      `gorm:"column:verified"`
 	CreatedAt      time.Time  `gorm:"column:created_at"`
 	UpdatedAt      time.Time  `gorm:"column:updated_at"`
@@ -77,9 +77,38 @@ func (user *User) Create(referenceKey string) error {
 			return fmt.Errorf("Database error: %s", db.Error.Error())
 		}
 	} else {
-		return fmt.Errorf("Email already in use by another user")
+		existingUser := &User{}
+		if cigExchange.GetDB().Model(temp).Related(existingUser, "LoginEmail").Error == nil {
+			if existingUser.Verified > 0 {
+				return fmt.Errorf("Email already in use by another user")
+			}
+
+			// prefill the uuid
+			orgUserWhere := &OrganisationUser{
+				UserID: existingUser.ID,
+			}
+
+			// delete unverified user
+			err := cigExchange.GetDB().Delete(existingUser).Error
+			if err != nil {
+				return fmt.Errorf("Database error: %s", err.Error())
+			}
+
+			// delete organization user connections
+			err = cigExchange.GetDB().Where(orgUserWhere).Delete(OrganisationUser{}).Error
+			if err != nil {
+				return fmt.Errorf("Database error: %s", err.Error())
+			}
+		}
+		// reuse the contact
+		user.LoginEmail = nil
+		user.LoginEmailUUID = &temp.ID
 	}
 
+	// Remove the phone contact for now
+	user.LoginPhone = nil
+	user.LoginPhoneUUID = nil
+	/*  Phone is disabled for now
 	// check that mobile is unique
 	db = cigExchange.GetDB().Where("value1 = ? AND value2 = ?", user.LoginPhone.Value1, user.LoginPhone.Value2).First(temp)
 	if db.Error != nil {
@@ -90,6 +119,7 @@ func (user *User) Create(referenceKey string) error {
 	} else {
 		return fmt.Errorf("Mobile already in use by another user")
 	}
+	*/
 
 	org := &Organisation{}
 	// verify organisation reference key if present
@@ -100,7 +130,7 @@ func (user *User) Create(referenceKey string) error {
 		}
 		err := cigExchange.GetDB().Where(orgWhere).First(org).Error
 		if err != nil {
-			return fmt.Errorf("Database error when loading organisation: %s", db.Error.Error())
+			return fmt.Errorf("Database error when loading organisation: %s", err.Error())
 		}
 	}
 
@@ -119,6 +149,11 @@ func (user *User) Create(referenceKey string) error {
 	}
 
 	return nil
+}
+
+// Save writes the user object changes into db
+func (user *User) Save() error {
+	return cigExchange.GetDB().Save(user).Error
 }
 
 // GetUser queries a single user from db
@@ -155,10 +190,7 @@ func GetUserByEmail(email string) (user *User, err error) {
 	}
 
 	user = &User{}
-	userWhere := &User{
-		LoginEmailUUID: cont.ID,
-	}
-	err = cigExchange.GetDB().Preload("LoginEmail").Preload("LoginPhone").Where(userWhere).First(user).Error
+	err = cigExchange.GetDB().Model(cont).Preload("LoginEmail").Preload("LoginPhone").Related(user, "LoginEmail").Error
 
 	return
 }
@@ -182,10 +214,7 @@ func GetUserByMobile(code, number string) (user *User, err error) {
 	}
 
 	user = &User{}
-	userWhere := &User{
-		LoginPhoneUUID: cont.ID,
-	}
-	err = cigExchange.GetDB().Preload("LoginEmail").Preload("LoginPhone").Where(userWhere).First(user).Error
+	err = cigExchange.GetDB().Model(cont).Preload("LoginEmail").Preload("LoginPhone").Related(user, "LoginPhone").Error
 
 	return
 }
