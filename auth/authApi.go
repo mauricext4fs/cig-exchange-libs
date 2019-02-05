@@ -76,11 +76,12 @@ func (resp *userResponse) randomUUID() {
 type UserAPI struct {
 	Platform string
 	BaseURI  string
+	SkipJWT  []string
 }
 
 // NewUserAPI creates UserApi instance
-func NewUserAPI(platform, baseURI string) *UserAPI {
-	return &UserAPI{Platform: platform, BaseURI: baseURI}
+func NewUserAPI(platform, baseURI string, skipJWT []string) *UserAPI {
+	return &UserAPI{Platform: platform, BaseURI: baseURI, SkipJWT: skipJWT}
 }
 
 type token struct {
@@ -93,22 +94,13 @@ func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		// List of endpoints that doesn't require auth
-		notAuth := []string{
-			userAPI.BaseURI + "ping",
-			userAPI.BaseURI + "users/signup",
-			userAPI.BaseURI + "users/signin",
-			userAPI.BaseURI + "users/send_otp",
-			userAPI.BaseURI + "users/verify_otp",
-			userAPI.BaseURI + "contact_us",
-		}
 		// current request path
 		requestPath := r.URL.Path
 
 		// check if request does not need authentication, serve the request if it doesn't need it
-		for _, value := range notAuth {
+		for _, value := range userAPI.SkipJWT {
 
-			if value == requestPath {
+			if requestPath == userAPI.BaseURI+value {
 				next.ServeHTTP(w, r)
 				return
 			}
