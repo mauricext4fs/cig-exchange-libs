@@ -12,19 +12,20 @@ import (
 
 // Offering is a struct to represent an offering
 type Offering struct {
-	ID          string         `json:"id" gorm:"column:id;primary_key"`
-	Title       string         `json:"title" gorm:"column:title"`
-	Type        pq.StringArray `json:"type" gorm:"column:type"`
-	Description string         `json:"description" gorm:"column:description"`
-	Rating      string         `json:"rating" gorm:"column:rating"`
-	Amount      float64        `json:"amount" gorm:"column:amount"`
-	Remaining   float64        `json:"remaining" gorm:"column:remaining"`
-	Interest    float64        `json:"interest" gorm:"column:interest"`
-	Period      int64          `json:"period" gorm:"column:period"`
-	Platform    string         `json:"platform" gorm:"column:platform"`
-	CreatedAt   time.Time      `json:"created_at" gorm:"column:created_at"`
-	UpdatedAt   time.Time      `json:"updated_at" gorm:"column:updated_at"`
-	DeletedAt   *time.Time     `json:"deleted_at" gorm:"column:deleted_at"`
+	ID             string         `json:"id" gorm:"column:id;primary_key"`
+	Title          string         `json:"title" gorm:"column:title"`
+	Type           pq.StringArray `json:"type" gorm:"column:type"`
+	Description    *string        `json:"description" gorm:"column:description"`
+	Rating         string         `json:"rating" gorm:"column:rating"`
+	Amount         float64        `json:"amount" gorm:"column:amount"`
+	Remaining      float64        `json:"remaining" gorm:"column:remaining"`
+	Interest       float64        `json:"interest" gorm:"column:interest"`
+	Period         int64          `json:"period" gorm:"column:period"`
+	Organisation   *Organisation  `json:"-" gorm:"foreignkey:OrganisationID;association_foreignkey:ID"`
+	OrganisationID *string        `json:"-" gorm:"column:organisation_id"`
+	CreatedAt      time.Time      `json:"-" gorm:"column:created_at"`
+	UpdatedAt      time.Time      `json:"-" gorm:"column:updated_at"`
+	DeletedAt      *time.Time     `json:"-" gorm:"column:deleted_at"`
 }
 
 // TableName returns table name for struct
@@ -48,7 +49,7 @@ func (offering *Offering) BeforeCreate(scope *gorm.Scope) error {
 // - required fields are pressent and not empty
 func (offering *Offering) Validate() error {
 
-	if len(offering.Platform) == 0 {
+	if offering.Organisation == nil || len(offering.Organisation.Name) == 0 {
 		return fmt.Errorf("Required field 'platform' missing")
 	}
 	return nil
@@ -64,7 +65,7 @@ func (offering *Offering) Create() error {
 		return err
 	}
 
-	return cigExchange.GetDB().Model(&Offering{}).Create(offering).Error
+	return cigExchange.GetDB().Create(offering).Error
 }
 
 // Update existing offering object in db
@@ -78,7 +79,7 @@ func (offering *Offering) Update() error {
 		return err
 	}
 
-	return cigExchange.GetDB().Model(&Offering{}).Updates(offering).Error
+	return cigExchange.GetDB().Updates(offering).Error
 }
 
 // Delete existing offering object in db
@@ -89,7 +90,7 @@ func (offering *Offering) Delete() error {
 		return fmt.Errorf("Offering UUID is not set")
 	}
 
-	return cigExchange.GetDB().Model(&Offering{}).Delete(offering).Error
+	return cigExchange.GetDB().Delete(offering).Error
 }
 
 // GetOffering queries a single offering from db
@@ -98,7 +99,7 @@ func GetOffering(UUID string) (*Offering, error) {
 	offering := &Offering{
 		ID: UUID,
 	}
-	err := cigExchange.GetDB().Model(&Offering{}).First(offering).Error
+	err := cigExchange.GetDB().First(offering).Error
 
 	return offering, err
 }
@@ -107,7 +108,7 @@ func GetOffering(UUID string) (*Offering, error) {
 func GetOfferings() ([]*Offering, error) {
 
 	offering := make([]*Offering, 0)
-	err := cigExchange.GetDB().Model(&Offering{}).Find(&offering).Error
+	err := cigExchange.GetDB().Preload("Organisation").Find(&offering).Error
 
 	return offering, err
 }
