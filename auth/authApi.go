@@ -192,6 +192,16 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 		cigExchange.Respond(w, resp)
 		return
 	}
+
+	// send welcome email async
+	go func() {
+		err = sendEmail(emailTypeWelcome, userReq.Email, "")
+		if err != nil {
+			fmt.Println("CreateUser: email sending error:")
+			fmt.Println(err.Error())
+		}
+	}()
+
 	resp.UUID = user.ID
 	cigExchange.Respond(w, resp)
 }
@@ -230,6 +240,7 @@ func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 		cigExchange.Respond(w, resp)
 		return
 	}
+
 	resp.UUID = user.ID
 	cigExchange.Respond(w, resp)
 }
@@ -248,44 +259,52 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	user, err := models.GetUser(reqStruct.UUID)
-	if err != nil {
-		fmt.Println("SendCode: db Lookup error:")
-		fmt.Println(err.Error())
-		return
-	}
-
-	// send code to email or phone number
-	if reqStruct.Type == "phone" {
-		if user.LoginPhone == nil {
-			fmt.Println("SendCode: User doesn't have phone contact")
-			return
-		}
-		twilioClient := cigExchange.GetTwilio()
-		_, err = twilioClient.ReceiveOTP(user.LoginPhone.Value1, user.LoginPhone.Value2)
+	// process the send OTP async so that client won't see any email sending delays
+	go func() {
+		user, err := models.GetUser(reqStruct.UUID)
 		if err != nil {
-			fmt.Println("SendCode: twillio error:")
-			fmt.Println(err.Error())
-		}
-	} else if reqStruct.Type == "email" {
-		if user.LoginEmail == nil {
-			fmt.Println("SendCode: User doesn't have email contact")
-			return
-		}
-		rediskey := cigExchange.GenerateRedisKey(reqStruct.UUID)
-		expiration := 5 * time.Minute
-
-		code := cigExchange.RandCode(6)
-		err = cigExchange.GetRedis().Set(rediskey, code, expiration).Err()
-		if err != nil {
-			fmt.Println("SendCode: redis error:")
+			fmt.Println("SendCode: db Lookup error:")
 			fmt.Println(err.Error())
 			return
 		}
-		sendCodeInEmail(code, user.LoginEmail.Value1)
-	} else {
-		fmt.Println("SendCode: Error: unsupported otp type")
-	}
+
+		// send code to email or phone number
+		if reqStruct.Type == "phone" {
+			if user.LoginPhone == nil {
+				fmt.Println("SendCode: User doesn't have phone contact")
+				return
+			}
+			twilioClient := cigExchange.GetTwilio()
+			_, err = twilioClient.ReceiveOTP(user.LoginPhone.Value1, user.LoginPhone.Value2)
+			if err != nil {
+				fmt.Println("SendCode: twillio error:")
+				fmt.Println(err.Error())
+			}
+		} else if reqStruct.Type == "email" {
+			if user.LoginEmail == nil {
+				fmt.Println("SendCode: User doesn't have email contact")
+				return
+			}
+			rediskey := cigExchange.GenerateRedisKey(reqStruct.UUID)
+			expiration := 5 * time.Minute
+
+			code := cigExchange.RandCode(6)
+			err = cigExchange.GetRedis().Set(rediskey, code, expiration).Err()
+			if err != nil {
+				fmt.Println("SendCode: redis error:")
+				fmt.Println(err.Error())
+				return
+			}
+			err = sendEmail(emailTypePinCode, user.LoginEmail.Value1, code)
+			if err != nil {
+				fmt.Println("SendCode: email sending error:")
+				fmt.Println(err.Error())
+				return
+			}
+		} else {
+			fmt.Println("SendCode: Error: unsupported otp type")
+		}
+	}()
 }
 
 // VerifyCodeHandler handles GET api/users/verify_otp endpoint
@@ -379,35 +398,51 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	cigExchange.Respond(w, resp)
 }
 
-func sendCodeInEmail(code, email string) {
+type emailType int
+
+const (
+	emailTypeWelcome emailType = iota
+	emailTypePinCode
+)
+
+func sendEmail(eType emailType, email, pinCode string) error {
 
 	mandrillClient := cigExchange.GetMandrill()
 
-	templateName := "pin-code"
-	templateContent, err := mandrillClient.TemplateInfo(templateName)
-	if err != nil {
-		fmt.Println("sendCodeInEmail: getting template error:")
-		fmt.Println(err.Error())
-		return
+	templateName := ""
+	mergeVars := make([]gochimp.Var, 0)
+
+	switch eType {
+	case emailTypeWelcome:
+		templateName = "welcome"
+	case emailTypePinCode:
+		templateName = "pin-code"
+		mVar := gochimp.Var{
+			Name:    "pincode",
+			Content: pinCode,
+		}
+		mergeVars = append(mergeVars, mVar)
+	default:
+		return fmt.Errorf("Unsupported email type: %v", eType)
 	}
 
-	contentVar := gochimp.Var{
-		Name:    "pin-code",
-		Content: templateContent,
-	}
-	content := []gochimp.Var{contentVar}
-
-	mergeVar := gochimp.Var{
-		Name:    "pincode",
-		Content: code,
-	}
-	merge := []gochimp.Var{mergeVar}
-
-	renderedTemplate, err := mandrillClient.TemplateRender(templateName, content, merge)
-	if err != nil {
-		fmt.Println("sendCodeInEmail: rendering template error:")
-		fmt.Println(err.Error())
-		return
+	// TemplateRender sometimes returns zero length string without giving any error (wtf???)
+	// retry is a workaround that helps to render it properly
+	renderedTemplate := ""
+	attempts := 0
+	for {
+		if len(renderedTemplate) > 0 {
+			break
+		}
+		if attempts > 5 {
+			return fmt.Errorf("Mandrill failure: unable to render template in %v attempts", attempts)
+		}
+		var err error
+		renderedTemplate, err = mandrillClient.TemplateRender(templateName, []gochimp.Var{}, mergeVars)
+		if err != nil {
+			return err
+		}
+		attempts++
 	}
 
 	recipients := []gochimp.Recipient{
@@ -422,9 +457,6 @@ func sendCodeInEmail(code, email string) {
 		To:        recipients,
 	}
 
-	_, err = mandrillClient.MessageSend(message, false)
-	if err != nil {
-		fmt.Println("sendCodeInEmail: send email error:")
-		fmt.Println(err.Error())
-	}
+	_, err := mandrillClient.MessageSend(message, false)
+	return err
 }
