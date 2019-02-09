@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -85,7 +86,8 @@ func NewUserAPI(platform, baseURI string, skipJWT []string) *UserAPI {
 }
 
 type token struct {
-	UserUUID string
+	UserUUID         string
+	OrganisationUUID string
 	jwt.StandardClaims
 }
 
@@ -152,6 +154,8 @@ func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler
 
 		// Everything went well, proceed with the request and set the caller to the user retrieved from the parsed token
 		ctx := context.WithValue(r.Context(), "user", tk.UserUUID)
+
+		log.Printf("jwt parsed: %#v", tk)
 		r = r.WithContext(ctx)
 		// proceed in the middleware chain!
 		next.ServeHTTP(w, r)
@@ -171,6 +175,13 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		fmt.Println("CreateUser: body JSON decoding error:")
 		fmt.Println(err.Error())
+		cigExchange.Respond(w, resp)
+		return
+	}
+
+	// user must use p2p or trading platform
+	if userReq.Platform != PlatformP2P && userReq.Platform != PlatformTrading {
+		fmt.Println("CreateUser: users are required to have a p2p or trading platform")
 		cigExchange.Respond(w, resp)
 		return
 	}
@@ -331,6 +342,19 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// get organisation UUID related to user
+	organisationUser := &models.OrganisationUser{}
+	db := cigExchange.GetDB().Model(user).Related(organisationUser, "UserID")
+	if db.Error != nil {
+		// organization can be missed
+		if !db.RecordNotFound() {
+			fmt.Printf("VerifyCode: Database error:")
+			fmt.Println(db.Error.Error())
+			cigExchange.RespondWithError(w, retCode, retErr)
+			return
+		}
+	}
+
 	// verify code
 	if reqStruct.Type == "phone" {
 		if user.LoginPhone == nil {
@@ -384,7 +408,10 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	// verification passed, generate jwt and return it
-	tk := &token{UserUUID: user.ID}
+	tk := &token{
+		UserUUID:         user.ID,
+		OrganisationUUID: organisationUser.OrganisationID,
+	}
 	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tk)
 	tokenString, err := token.SignedString([]byte(os.Getenv("TOKEN_PASSWORD")))
 	if err != nil {

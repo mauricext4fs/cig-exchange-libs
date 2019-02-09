@@ -63,6 +63,7 @@ func (user *User) Create(referenceKey string) error {
 		return reqError
 	} else if len(user.LoginPhone.Value2) == 0 {
 		return reqError
+	} else if len(user.Pl)
 	} else if !strings.Contains(user.LoginEmail.Value1, "@") {
 		return reqError
 	}
