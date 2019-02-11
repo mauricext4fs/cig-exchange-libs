@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -155,7 +154,6 @@ func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler
 		// Everything went well, proceed with the request and set the caller to the user retrieved from the parsed token
 		ctx := context.WithValue(r.Context(), "user", tk.UserUUID)
 
-		log.Printf("jwt parsed: %#v", tk)
 		r = r.WithContext(ctx)
 		// proceed in the middleware chain!
 		next.ServeHTTP(w, r)
