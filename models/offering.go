@@ -21,10 +21,11 @@ type Offering struct {
 	Remaining      float64        `json:"remaining" gorm:"column:remaining"`
 	Interest       float64        `json:"interest" gorm:"column:interest"`
 	Period         int64          `json:"period" gorm:"column:period"`
-	Organisation   *Organisation  `json:"-" gorm:"foreignkey:OrganisationID;association_foreignkey:ID"`
-	OrganisationID *string        `json:"-" gorm:"column:organisation_id"`
-	CreatedAt      time.Time      `json:"-" gorm:"column:created_at"`
-	UpdatedAt      time.Time      `json:"-" gorm:"column:updated_at"`
+	Origin         string         `json:"origin" gorm:"column:origin"`
+	Organisation   Organisation   `json:"-" gorm:"foreignkey:OrganisationID;association_foreignkey:ID"`
+	OrganisationID string         `json:"organisation_id" gorm:"column:organisation_id"`
+	CreatedAt      time.Time      `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt      time.Time      `json:"updated_at" gorm:"column:updated_at"`
 	DeletedAt      *time.Time     `json:"-" gorm:"column:deleted_at"`
 }
 
@@ -49,8 +50,20 @@ func (offering *Offering) BeforeCreate(scope *gorm.Scope) error {
 // - required fields are pressent and not empty
 func (offering *Offering) Validate() error {
 
-	if offering.Organisation == nil || len(offering.Organisation.Name) == 0 {
-		return fmt.Errorf("Required field 'platform' missing")
+	if len(offering.OrganisationID) == 0 {
+		return fmt.Errorf("Required field 'organisation_id' missing")
+	}
+	// check that organisation UUID is valid
+	organization := &Organisation{}
+	db := cigExchange.GetDB().Where(&Organisation{ID: offering.OrganisationID}).First(&organization)
+	if db.Error != nil {
+
+		if db.RecordNotFound() {
+			// organisation with UUID doesn't exist
+			return fmt.Errorf("'organisation_id' field is invalid")
+		}
+		// database error
+		return fmt.Errorf("Database error: %s", db.Error.Error())
 	}
 	return nil
 }
@@ -60,6 +73,8 @@ func (offering *Offering) Create() error {
 
 	// invalidate the uuid
 	offering.ID = ""
+	offering.CreatedAt = time.Time{}
+	offering.UpdatedAt = time.Time{}
 
 	if err := offering.Validate(); err != nil {
 		return err
@@ -75,11 +90,15 @@ func (offering *Offering) Update() error {
 	if len(offering.ID) == 0 {
 		return fmt.Errorf("Offering UUID is not set")
 	}
+
+	offering.CreatedAt = time.Time{}
+	offering.UpdatedAt = time.Time{}
+
 	if err := offering.Validate(); err != nil {
 		return err
 	}
 
-	return cigExchange.GetDB().Updates(offering).Error
+	return cigExchange.GetDB().Model(offering).Updates(offering).Error
 }
 
 // Delete existing offering object in db
