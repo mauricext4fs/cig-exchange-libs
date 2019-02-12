@@ -215,7 +215,7 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 	cigExchange.Respond(w, resp)
 }
 
-// GetUserHandler handles GET api/users/signin endpoint
+// GetUserHandler handles POST api/users/signin endpoint
 func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	resp := &userResponse{}
@@ -316,7 +316,7 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 	}()
 }
 
-// VerifyCodeHandler handles GET api/users/verify_otp endpoint
+// VerifyCodeHandler handles POST api/users/verify_otp endpoint
 func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	retErr := fmt.Errorf("Invalid code")
