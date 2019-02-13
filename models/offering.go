@@ -22,6 +22,7 @@ type Offering struct {
 	Interest       float64        `json:"interest" gorm:"column:interest"`
 	Period         int64          `json:"period" gorm:"column:period"`
 	Origin         string         `json:"origin" gorm:"column:origin"`
+	IsVisible      bool           `json:"is_visible" gorm:"is_visible"`
 	Organisation   Organisation   `json:"-" gorm:"foreignkey:OrganisationID;association_foreignkey:ID"`
 	OrganisationID string         `json:"organisation_id" gorm:"column:organisation_id"`
 	CreatedAt      time.Time      `json:"created_at" gorm:"column:created_at"`
