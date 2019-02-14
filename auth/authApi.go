@@ -90,6 +90,27 @@ type token struct {
 	jwt.StandardClaims
 }
 
+type key int
+
+const (
+	keyJWT key = iota
+)
+
+// GetContextValues extracts the userID and organisationID from the request context
+// Should be used by JWT enabled API calls
+func GetContextValues(r *http.Request) (userID, organisationID string) {
+	// extract the entire token struct
+	tk, ok := r.Context().Value(keyJWT).(token)
+	if !ok {
+		fmt.Println("GetContextValues: no context value exists")
+		return
+	}
+
+	userID = tk.UserUUID
+	organisationID = tk.OrganisationUUID
+	return
+}
+
 // JwtAuthenticationHandler handles auth for endpoints
 func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler {
 
@@ -152,7 +173,7 @@ func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler
 		}
 
 		// Everything went well, proceed with the request and set the caller to the user retrieved from the parsed token
-		ctx := context.WithValue(r.Context(), "user", tk.UserUUID)
+		ctx := context.WithValue(r.Context(), keyJWT, tk)
 
 		r = r.WithContext(ctx)
 		// proceed in the middleware chain!

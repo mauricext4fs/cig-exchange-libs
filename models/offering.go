@@ -132,3 +132,12 @@ func GetOfferings() ([]*Offering, error) {
 
 	return offering, err
 }
+
+// GetOrganisationOfferings queries all offering objects from db for a given organisation
+func GetOrganisationOfferings(organisationID string) ([]*Offering, error) {
+
+	offering := make([]*Offering, 0)
+	err := cigExchange.GetDB().Preload("Organisation").Where(&Offering{OrganisationID: organisationID}).Find(&offering).Error
+
+	return offering, err
+}
