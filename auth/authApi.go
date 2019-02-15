@@ -100,7 +100,7 @@ const (
 // Should be used by JWT enabled API calls
 func GetContextValues(r *http.Request) (userID, organisationID string) {
 	// extract the entire token struct
-	tk, ok := r.Context().Value(keyJWT).(token)
+	tk, ok := r.Context().Value(keyJWT).(*token)
 	if !ok {
 		fmt.Println("GetContextValues: no context value exists")
 		return
