@@ -2,6 +2,9 @@ package models
 
 import (
 	"time"
+
+	"github.com/jinzhu/gorm"
+	uuid "github.com/satori/go.uuid"
 )
 
 // Organisation is a struct to represent an organisation
@@ -18,8 +21,20 @@ type Organisation struct {
 }
 
 // TableName returns table name for struct
-func (user *Organisation) TableName() string {
+func (*Organisation) TableName() string {
 	return "organisation"
+}
+
+// BeforeCreate generates new unique UUIDs for new db records
+func (*Organisation) BeforeCreate(scope *gorm.Scope) error {
+
+	UUID, err := uuid.NewV4()
+	if err != nil {
+		return err
+	}
+	scope.SetColumn("ID", UUID.String())
+
+	return nil
 }
 
 // OrganisationUser is a struct to represent an organisation to user link
@@ -29,6 +44,6 @@ type OrganisationUser struct {
 }
 
 // TableName returns table name for struct
-func (user *OrganisationUser) TableName() string {
+func (*OrganisationUser) TableName() string {
 	return "organisation_user"
 }

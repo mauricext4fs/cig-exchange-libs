@@ -26,12 +26,12 @@ type Contact struct {
 }
 
 // TableName returns table name for struct
-func (contact *Contact) TableName() string {
+func (*Contact) TableName() string {
 	return "contact"
 }
 
 // BeforeCreate generates new unique UUIDs for new db records
-func (contact *Contact) BeforeCreate(scope *gorm.Scope) error {
+func (*Contact) BeforeCreate(scope *gorm.Scope) error {
 
 	UUID, err := uuid.NewV4()
 	if err != nil {
