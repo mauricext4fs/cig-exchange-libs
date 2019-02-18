@@ -31,12 +31,12 @@ type Offering struct {
 }
 
 // TableName returns table name for struct
-func (offering *Offering) TableName() string {
+func (*Offering) TableName() string {
 	return "offering"
 }
 
 // BeforeCreate generates new unique UUIDs for new db records
-func (offering *Offering) BeforeCreate(scope *gorm.Scope) error {
+func (*Offering) BeforeCreate(scope *gorm.Scope) error {
 
 	UUID, err := uuid.NewV4()
 	if err != nil {
