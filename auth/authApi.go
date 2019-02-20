@@ -22,7 +22,8 @@ const (
 	PlatformTrading = "trading"
 )
 
-const tokenExpirationTimeInMin = 60
+// Expiration time is one month
+const tokenExpirationTimeInMin = 60 * 24 * 31
 
 type userResponse struct {
 	UUID string `json:"uuid"`
