@@ -22,6 +22,9 @@ const (
 	PlatformTrading = "trading"
 )
 
+// Expiration time is one month
+const tokenExpirationTimeInMin = 60 * 24 * 31
+
 type userResponse struct {
 	UUID string `json:"uuid"`
 }
@@ -84,6 +87,14 @@ func NewUserAPI(platform, baseURI string, skipJWT []string) *UserAPI {
 	return &UserAPI{Platform: platform, BaseURI: baseURI, SkipJWT: skipJWT}
 }
 
+// LoggedInUser is passed to controllers after jwt auth
+type LoggedInUser struct {
+	UserUUID         string
+	OrganisationUUID string
+	CreationDate     time.Time
+	ExpirationDate   time.Time
+}
+
 type token struct {
 	UserUUID         string
 	OrganisationUUID string
@@ -98,16 +109,29 @@ const (
 
 // GetContextValues extracts the userID and organisationID from the request context
 // Should be used by JWT enabled API calls
-func GetContextValues(r *http.Request) (userID, organisationID string) {
+func GetContextValues(r *http.Request) (loggedInUser *LoggedInUser, err error) {
 	// extract the entire token struct
 	tk, ok := r.Context().Value(keyJWT).(*token)
 	if !ok {
 		fmt.Println("GetContextValues: no context value exists")
+		err = fmt.Errorf("Invalid access token")
 		return
 	}
 
-	userID = tk.UserUUID
-	organisationID = tk.OrganisationUUID
+	loggedInUser = &LoggedInUser{}
+	loggedInUser.UserUUID = tk.UserUUID
+	loggedInUser.OrganisationUUID = tk.OrganisationUUID
+	issued := time.Unix(tk.IssuedAt, 0)
+	expires := time.Unix(tk.ExpiresAt, 0)
+	if issued.IsZero() || expires.IsZero() {
+		fmt.Println("GetContextValues: broken context value")
+		err = fmt.Errorf("Invalid access token")
+		return
+	}
+
+	loggedInUser.CreationDate = issued
+	loggedInUser.ExpirationDate = expires
+
 	return
 }
 
@@ -428,8 +452,12 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 
 	// verification passed, generate jwt and return it
 	tk := &token{
-		UserUUID:         user.ID,
-		OrganisationUUID: organisationUser.OrganisationID,
+		user.ID,
+		organisationUser.OrganisationID,
+		jwt.StandardClaims{
+			IssuedAt:  time.Now().Unix(),
+			ExpiresAt: time.Now().Add(time.Minute * tokenExpirationTimeInMin).Unix(),
+		},
 	}
 	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tk)
 	tokenString, err := token.SignedString([]byte(os.Getenv("TOKEN_PASSWORD")))
