@@ -218,14 +218,14 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		fmt.Println("CreateUser: body JSON decoding error:")
 		fmt.Println(err.Error())
-		cigExchange.Respond(w, resp)
+		cigExchange.RespondWithError(w, 400, err)
 		return
 	}
 
 	// user must use p2p or trading platform
 	if userReq.Platform != PlatformP2P && userReq.Platform != PlatformTrading {
 		fmt.Println("CreateUser: users are required to have a p2p or trading platform")
-		cigExchange.Respond(w, resp)
+		cigExchange.RespondWithError(w, 400, err)
 		return
 	}
 
@@ -234,7 +234,7 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 	// P2P users are required to have an organisation reference key
 	if userReq.Platform == PlatformP2P && len(userReq.ReferenceKey) == 0 {
 		fmt.Println("CreateUser: P2P users are required to have a reference key")
-		cigExchange.Respond(w, resp)
+		cigExchange.RespondWithError(w, 400, err)
 		return
 	}
 
@@ -243,7 +243,11 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		fmt.Println("CreateUser: db Create error:")
 		fmt.Println(err.Error())
-		cigExchange.Respond(w, resp)
+		if cigExchange.ShouldSilenceError(err) {
+			cigExchange.Respond(w, resp)
+		} else {
+			cigExchange.RespondWithError(w, 400, err)
+		}
 		return
 	}
 

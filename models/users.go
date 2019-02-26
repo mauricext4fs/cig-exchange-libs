@@ -80,7 +80,7 @@ func (user *User) Create(referenceKey string) error {
 		existingUser := &User{}
 		if cigExchange.GetDB().Model(temp).Related(existingUser, "LoginEmail").Error == nil {
 			if existingUser.Verified > 0 {
-				return fmt.Errorf("Email already in use by another user")
+				return cigExchange.ErrUserNotFound
 			}
 
 			// prefill the uuid
