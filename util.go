@@ -23,6 +23,8 @@ func GenerateRedisKey(UUID string) string {
 	return fmt.Sprintf("%s_signup_key", UUID)
 }
 
+// BEGIN SECTION: this api will be deprecated soon
+
 // apiError is a struct representing server error response
 type apiError struct {
 	Message string
@@ -50,4 +52,14 @@ func RespondWithError(w http.ResponseWriter, statusCode int, err error) {
 func Respond(w http.ResponseWriter, object interface{}) {
 	w.Header().Add("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(object)
+}
+
+// END SECTION: this api will be deprecated soon
+
+// RespondWithAPIError writes APIError into http.ResponseWriter,
+// populates the content type and request status code
+func RespondWithAPIError(w http.ResponseWriter, apiErr *APIError) {
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(apiErr.Code)
+	json.NewEncoder(w).Encode(apiErr)
 }

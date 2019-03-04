@@ -216,9 +216,9 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 	// decode user object from request body
 	err := json.NewDecoder(r.Body).Decode(userReq)
 	if err != nil {
-		fmt.Println("CreateUser: body JSON decoding error:")
-		fmt.Println(err.Error())
-		cigExchange.RespondWithError(w, 400, err)
+		apiError := cigExchange.NewJSONDecodingError(err)
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
 		return
 	}
 
@@ -273,9 +273,9 @@ func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	// decode user object from request body
 	err := json.NewDecoder(r.Body).Decode(userReq)
 	if err != nil {
-		fmt.Println("GetUser: body JSON decoding error:")
-		fmt.Println(err.Error())
-		cigExchange.Respond(w, resp)
+		apiError := cigExchange.NewJSONDecodingError(err)
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
 		return
 	}
 
@@ -311,8 +311,9 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 	// decode verificationCodeRequest object from request body
 	err := json.NewDecoder(r.Body).Decode(reqStruct)
 	if err != nil {
-		fmt.Println("SendCode: body JSON decoding error:")
-		fmt.Println(err.Error())
+		apiError := cigExchange.NewJSONDecodingError(err)
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
 		return
 	}
 
@@ -375,9 +376,9 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	// decode verificationCodeRequest object from request body
 	err := json.NewDecoder(r.Body).Decode(reqStruct)
 	if err != nil {
-		fmt.Println("VerifyCode: body JSON decoding error:")
-		fmt.Println(err.Error())
-		cigExchange.RespondWithError(w, retCode, retErr)
+		apiError := cigExchange.NewJSONDecodingError(err)
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
 		return
 	}
 

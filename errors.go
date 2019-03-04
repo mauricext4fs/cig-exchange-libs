@@ -1,6 +1,7 @@
 package cigExchange
 
 import (
+	"fmt"
 	"net/http"
 )
 
@@ -30,6 +31,7 @@ const (
 	NestedErrorFieldMissing      = "Missing field"
 	NestedErrorFieldInvalid      = "Invalid field"
 	NestedErrorGormFailure       = "GORM failure"
+	NestedErrorJSONFailure       = "JSON decoding failure"
 )
 
 // APIError is a custom error type that gets reported to the client
@@ -61,6 +63,7 @@ func (e *APIError) NewNestedError() *NestedAPIError {
 func (e *APIError) SetErrorType(errType string) {
 
 	e.Type = errType
+	e.Message = errType
 
 	// choose the corresponding error code
 	switch e.Type {
@@ -101,6 +104,22 @@ func (e *APIError) ShouldSilenceError() bool {
 	return false
 }
 
+// ToString creates a string representation of the error
+func (e *APIError) ToString() string {
+	res := fmt.Sprintf("[%d] %s", e.Code, e.Type)
+	for _, nested := range e.Errors {
+		res += fmt.Sprintf("\n%s : %s", nested.Reason, nested.Message)
+		if len(nested.Field) > 0 {
+			res += " [" + nested.Field + "]"
+		}
+		if nested.OriginalError != nil {
+			res += " " + nested.OriginalError.Error()
+		}
+	}
+
+	return res
+}
+
 // Helper functions for creating specific errors
 
 // NewGormError creates APIError with ErrorTypeDatabaseFailure
@@ -117,7 +136,7 @@ func NewGormError(message string, err error) *APIError {
 	return apiErr
 }
 
-// NewUserDoesntExistError creates APIError with  ErrorTypeUnauthorized
+// NewUserDoesntExistError creates APIError with ErrorTypeUnauthorized
 // and nested error with NestedErrorUserDoesntExist reason
 // This error is silenced by default (not shown to the client by authAPI)
 func NewUserDoesntExistError(message string) *APIError {
@@ -131,7 +150,7 @@ func NewUserDoesntExistError(message string) *APIError {
 	return apiErr
 }
 
-// NewRequiredFieldError creates APIError with  ErrorTypeUnprocessable
+// NewRequiredFieldError creates APIError with ErrorTypeUnprocessable
 // and nested error(s) with NestedErrorFieldMissing reason and filled field name
 func NewRequiredFieldError(fields []string) *APIError {
 	apiErr := &APIError{}
@@ -147,7 +166,7 @@ func NewRequiredFieldError(fields []string) *APIError {
 	return apiErr
 }
 
-// NewInvalidFieldError creates APIError with  ErrorTypeUnprocessable
+// NewInvalidFieldError creates APIError with ErrorTypeUnprocessable
 // and nested error with NestedErrorFieldInvalid reason with filled message and field name
 func NewInvalidFieldError(fieldName, message string) *APIError {
 	apiErr := &APIError{}
@@ -157,6 +176,20 @@ func NewInvalidFieldError(fieldName, message string) *APIError {
 	nesetedError.Reason = NestedErrorFieldInvalid
 	nesetedError.Field = fieldName
 	nesetedError.Message = message
+
+	return apiErr
+}
+
+// NewJSONDecodingError creates APIError with NewBadRequestError
+// and nested error with NestedErrorJSONFailure reason
+func NewJSONDecodingError(err error) *APIError {
+	apiErr := &APIError{}
+	apiErr.SetErrorType(ErrorTypeBadRequest)
+
+	nesetedError := apiErr.NewNestedError()
+	nesetedError.Reason = NestedErrorJSONFailure
+	nesetedError.Message = "Request body decoding failed"
+	nesetedError.OriginalError = err
 
 	return apiErr
 }
