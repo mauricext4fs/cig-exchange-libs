@@ -239,14 +239,13 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	// try to create user
-	err = user.Create(userReq.ReferenceKey)
-	if err != nil {
-		fmt.Println("CreateUser: db Create error:")
-		fmt.Println(err.Error())
-		if cigExchange.ShouldSilenceError(err) {
+	apiErr := user.Create(userReq.ReferenceKey)
+	if apiErr != nil {
+		if apiErr.ShouldSilenceError() {
 			cigExchange.Respond(w, resp)
 		} else {
-			cigExchange.RespondWithError(w, 400, err)
+			// TODO: update this code
+			cigExchange.RespondWithError(w, 400, fmt.Errorf("update this code"))
 		}
 		return
 	}
@@ -281,20 +280,20 @@ func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := &models.User{}
+	var apiErr *cigExchange.APIError
 	// login using email or phone number
 	if len(userReq.Email) > 0 {
-		user, err = models.GetUserByEmail(userReq.Email)
+		user, apiErr = models.GetUserByEmail(userReq.Email)
 	} else if len(userReq.PhoneCountryCode) > 0 && len(userReq.PhoneNumber) > 0 {
-		user, err = models.GetUserByMobile(userReq.PhoneCountryCode, userReq.PhoneNumber)
+		user, apiErr = models.GetUserByMobile(userReq.PhoneCountryCode, userReq.PhoneNumber)
 	} else {
 		fmt.Println("GetUser: neither email or mobile number specified in post body")
 		cigExchange.Respond(w, resp)
 		return
 	}
 
-	if err != nil {
-		fmt.Println("GetUser: db Lookup error:")
-		fmt.Println(err.Error())
+	if apiErr != nil {
+		// TODO: update this code
 		cigExchange.Respond(w, resp)
 		return
 	}
@@ -322,7 +321,8 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 		user, err := models.GetUser(reqStruct.UUID)
 		if err != nil {
 			fmt.Println("SendCode: db Lookup error:")
-			fmt.Println(err.Error())
+			// TODO: update this code
+			//fmt.Println(err.Error())
 			return
 		}
 

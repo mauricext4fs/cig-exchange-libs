@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-redis/redis"
 	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/postgres"
+	_ "github.com/jinzhu/gorm/dialects/postgres" // postgresql driver
 	"github.com/joho/godotenv"
 	"github.com/mattbaird/gochimp"
 )
