@@ -222,10 +222,19 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// check that we received 'platform' parameter
+	if len(userReq.Platform) == 0 {
+		apiError := cigExchange.NewRequiredFieldError([]string{"platform"})
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
 	// user must use p2p or trading platform
 	if userReq.Platform != PlatformP2P && userReq.Platform != PlatformTrading {
-		fmt.Println("CreateUser: users are required to have a p2p or trading platform")
-		cigExchange.RespondWithError(w, 400, err)
+		apiError := cigExchange.NewInvalidFieldError("platform", "Invalid platform parameter")
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
 		return
 	}
 
@@ -233,19 +242,20 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 
 	// P2P users are required to have an organisation reference key
 	if userReq.Platform == PlatformP2P && len(userReq.ReferenceKey) == 0 {
-		fmt.Println("CreateUser: P2P users are required to have a reference key")
-		cigExchange.RespondWithError(w, 400, err)
+		apiError := cigExchange.NewRequiredFieldError([]string{"reference_key"})
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
 		return
 	}
 
 	// try to create user
-	apiErr := user.Create(userReq.ReferenceKey)
-	if apiErr != nil {
-		if apiErr.ShouldSilenceError() {
+	apiError := user.Create(userReq.ReferenceKey)
+	if apiError != nil {
+		fmt.Println(apiError.ToString())
+		if apiError.ShouldSilenceError() {
 			cigExchange.Respond(w, resp)
 		} else {
-			// TODO: update this code
-			cigExchange.RespondWithError(w, 400, fmt.Errorf("update this code"))
+			cigExchange.RespondWithAPIError(w, apiError)
 		}
 		return
 	}
@@ -280,21 +290,24 @@ func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := &models.User{}
-	var apiErr *cigExchange.APIError
+	var apiError *cigExchange.APIError
 	// login using email or phone number
 	if len(userReq.Email) > 0 {
-		user, apiErr = models.GetUserByEmail(userReq.Email)
+		user, apiError = models.GetUserByEmail(userReq.Email)
 	} else if len(userReq.PhoneCountryCode) > 0 && len(userReq.PhoneNumber) > 0 {
-		user, apiErr = models.GetUserByMobile(userReq.PhoneCountryCode, userReq.PhoneNumber)
+		user, apiError = models.GetUserByMobile(userReq.PhoneCountryCode, userReq.PhoneNumber)
 	} else {
-		fmt.Println("GetUser: neither email or mobile number specified in post body")
-		cigExchange.Respond(w, resp)
-		return
+		// neither email or phone specified
+		apiError = cigExchange.NewRequiredFieldError([]string{"email", "phone_number", "phone_country_code"})
 	}
 
-	if apiErr != nil {
-		// TODO: update this code
-		cigExchange.Respond(w, resp)
+	if apiError != nil {
+		fmt.Println(apiError.ToString())
+		if apiError.ShouldSilenceError() {
+			cigExchange.Respond(w, resp)
+		} else {
+			cigExchange.RespondWithAPIError(w, apiError)
+		}
 		return
 	}
 
@@ -304,8 +317,6 @@ func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 
 // SendCodeHandler handles POST api/users/send_otp endpoint
 func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) {
-
-	w.WriteHeader(204)
 
 	reqStruct := &verificationCodeRequest{}
 	// decode verificationCodeRequest object from request body
@@ -317,13 +328,14 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// respond with 204
+	w.WriteHeader(204)
+
 	// process the send OTP async so that client won't see any email sending delays
 	go func() {
-		user, err := models.GetUser(reqStruct.UUID)
-		if err != nil {
-			fmt.Println("SendCode: db Lookup error:")
-			// TODO: update this code
-			//fmt.Println(err.Error())
+		user, apiError := models.GetUser(reqStruct.UUID)
+		if apiError != nil {
+			fmt.Println(apiError.ToString())
 			return
 		}
 
@@ -369,8 +381,12 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 // VerifyCodeHandler handles POST api/users/verify_otp endpoint
 func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request) {
 
-	retErr := fmt.Errorf("Invalid code")
-	retCode := 401
+	// prepare the default response to send (unauthorized / invalid code)
+	secureErrorResponse := &cigExchange.APIError{}
+	secureErrorResponse.SetErrorType(cigExchange.ErrorTypeUnauthorized)
+	nestedError := secureErrorResponse.NewNestedError()
+	nestedError.Reason = cigExchange.NestedErrorFieldInvalid
+	nestedError.Message = "Invalid code"
 
 	reqStruct := &verificationCodeRequest{}
 	// decode verificationCodeRequest object from request body
@@ -382,11 +398,14 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	user, err := models.GetUser(reqStruct.UUID)
+	user, apiError := models.GetUser(reqStruct.UUID)
 	if err != nil {
-		fmt.Println("VerifyCode: db Lookup error:")
-		fmt.Println(err.Error())
-		cigExchange.RespondWithError(w, retCode, retErr)
+		fmt.Println(apiError.ToString())
+		if apiError.ShouldSilenceError() {
+			cigExchange.RespondWithAPIError(w, secureErrorResponse)
+		} else {
+			cigExchange.RespondWithAPIError(w, apiError)
+		}
 		return
 	}
 
@@ -396,9 +415,9 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	if db.Error != nil {
 		// organization can be missed
 		if !db.RecordNotFound() {
-			fmt.Printf("VerifyCode: Database error:")
-			fmt.Println(db.Error.Error())
-			cigExchange.RespondWithError(w, retCode, retErr)
+			apiError = cigExchange.NewGormError("Organization user links lookup failed", db.Error)
+			fmt.Printf(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
 	}
@@ -406,52 +425,54 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	// verify code
 	if reqStruct.Type == "phone" {
 		if user.LoginPhone == nil {
-			fmt.Println("VerifyCode: User doesn't have phone contact")
-			cigExchange.RespondWithError(w, retCode, retErr)
+			apiError = cigExchange.NewInvalidFieldError("type", "User doesn't have phone contact")
+			fmt.Printf(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
 		twilioClient := cigExchange.GetTwilio()
 		_, err := twilioClient.VerifyOTP(reqStruct.Code, user.LoginPhone.Value1, user.LoginPhone.Value2)
 		if err != nil {
-			fmt.Println("VerifyCode: twillio error:")
-			fmt.Println(err.Error())
-			cigExchange.RespondWithError(w, retCode, retErr)
+			apiError = cigExchange.NewTwilioError("Verify OTP", err)
+			fmt.Printf(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
 
 	} else if reqStruct.Type == "email" {
 		if user.LoginEmail == nil {
-			fmt.Println("VerifyCode: User doesn't have email contact")
-			cigExchange.RespondWithError(w, retCode, retErr)
+			apiError = cigExchange.NewInvalidFieldError("type", "User doesn't have email contact")
+			fmt.Printf(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
 		rediskey := cigExchange.GenerateRedisKey(reqStruct.UUID)
 
 		redisCmd := cigExchange.GetRedis().Get(rediskey)
 		if redisCmd.Err() != nil {
-			fmt.Println("VerifyCode: redis error:")
-			fmt.Println(err.Error())
-			cigExchange.RespondWithError(w, retCode, retErr)
+			apiError = cigExchange.NewRedisError("Get code failure", redisCmd.Err())
+			fmt.Printf(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
 		if redisCmd.Val() != reqStruct.Code {
 			fmt.Println("VerifyCode: code mismatch, expecting " + redisCmd.Val())
-			cigExchange.RespondWithError(w, retCode, retErr)
+			cigExchange.RespondWithAPIError(w, secureErrorResponse)
 			return
 		}
 	} else {
-		fmt.Println("VerifyCode: Error: unsupported otp type")
-		cigExchange.RespondWithError(w, retCode, retErr)
+		apiError = cigExchange.NewRequiredFieldError([]string{"email", "phone_number", "phone_country_code"})
+		fmt.Printf(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
 		return
 	}
 
 	// user is verified
 	user.Verified = 1
-	err = user.Save()
+	apiError = user.Save()
 	if err != nil {
-		fmt.Println("VerifyCode: db Save error:")
-		fmt.Println(err.Error())
-		cigExchange.RespondWithError(w, retCode, retErr)
+		fmt.Printf(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
 		return
 	}
 
@@ -469,7 +490,7 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		fmt.Println("VerifyCode: jwt generation failed:")
 		fmt.Println(err.Error())
-		cigExchange.RespondWithError(w, retCode, retErr)
+		cigExchange.RespondWithAPIError(w, secureErrorResponse)
 		return
 	}
 

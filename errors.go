@@ -22,6 +22,7 @@ const (
 	ErrorTypeUnprocessable   = "Unprocessable entity"
 	ErrorTypeDatabaseFailure = "Database error"
 	ErrorTypeRedisFailure    = "Redis error"
+	ErrorTypeTwilioFailure   = "Twilio error"
 )
 
 // nested API Error reasons
@@ -31,6 +32,8 @@ const (
 	NestedErrorFieldMissing      = "Missing field"
 	NestedErrorFieldInvalid      = "Invalid field"
 	NestedErrorGormFailure       = "GORM failure"
+	NestedErrorRedisFailure      = "Redis failure"
+	NestedErrorTwilioFailure     = "Twilio failure"
 	NestedErrorJSONFailure       = "JSON decoding failure"
 )
 
@@ -130,6 +133,34 @@ func NewGormError(message string, err error) *APIError {
 
 	nesetedError := apiErr.NewNestedError()
 	nesetedError.Reason = NestedErrorGormFailure
+	nesetedError.Message = message
+	nesetedError.OriginalError = err
+
+	return apiErr
+}
+
+// NewRedisError creates APIError with ErrorTypeRedisFailure
+// and nested error with NestedErrorRedisFailure reason
+func NewRedisError(message string, err error) *APIError {
+	apiErr := &APIError{}
+	apiErr.SetErrorType(ErrorTypeRedisFailure)
+
+	nesetedError := apiErr.NewNestedError()
+	nesetedError.Reason = NestedErrorRedisFailure
+	nesetedError.Message = message
+	nesetedError.OriginalError = err
+
+	return apiErr
+}
+
+// NewTwilioError creates APIError with ErrorTypeTwilioFailure
+// and nested error with NestedErrorTwilioFailure reason
+func NewTwilioError(message string, err error) *APIError {
+	apiErr := &APIError{}
+	apiErr.SetErrorType(ErrorTypeTwilioFailure)
+
+	nesetedError := apiErr.NewNestedError()
+	nesetedError.Reason = NestedErrorTwilioFailure
 	nesetedError.Message = message
 	nesetedError.OriginalError = err
 
