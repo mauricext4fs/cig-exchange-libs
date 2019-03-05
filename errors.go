@@ -55,9 +55,12 @@ type NestedAPIError struct {
 }
 
 // NewNestedError inserts a new nested error
-func (e *APIError) NewNestedError() *NestedAPIError {
+func (e *APIError) NewNestedError(reason, message string) *NestedAPIError {
 
-	nestedError := &NestedAPIError{}
+	nestedError := &NestedAPIError{
+		Reason:  reason,
+		Message: message,
+	}
 	e.Errors = append(e.Errors, nestedError)
 	return nestedError
 }
@@ -131,9 +134,7 @@ func NewGormError(message string, err error) *APIError {
 	apiErr := &APIError{}
 	apiErr.SetErrorType(ErrorTypeDatabaseFailure)
 
-	nesetedError := apiErr.NewNestedError()
-	nesetedError.Reason = NestedErrorGormFailure
-	nesetedError.Message = message
+	nesetedError := apiErr.NewNestedError(NestedErrorGormFailure, message)
 	nesetedError.OriginalError = err
 
 	return apiErr
@@ -145,9 +146,7 @@ func NewRedisError(message string, err error) *APIError {
 	apiErr := &APIError{}
 	apiErr.SetErrorType(ErrorTypeRedisFailure)
 
-	nesetedError := apiErr.NewNestedError()
-	nesetedError.Reason = NestedErrorRedisFailure
-	nesetedError.Message = message
+	nesetedError := apiErr.NewNestedError(NestedErrorRedisFailure, message)
 	nesetedError.OriginalError = err
 
 	return apiErr
@@ -159,9 +158,7 @@ func NewTwilioError(message string, err error) *APIError {
 	apiErr := &APIError{}
 	apiErr.SetErrorType(ErrorTypeTwilioFailure)
 
-	nesetedError := apiErr.NewNestedError()
-	nesetedError.Reason = NestedErrorTwilioFailure
-	nesetedError.Message = message
+	nesetedError := apiErr.NewNestedError(NestedErrorTwilioFailure, message)
 	nesetedError.OriginalError = err
 
 	return apiErr
@@ -173,11 +170,7 @@ func NewTwilioError(message string, err error) *APIError {
 func NewUserDoesntExistError(message string) *APIError {
 	apiErr := &APIError{}
 	apiErr.SetErrorType(ErrorTypeUnauthorized)
-
-	nesetedError := apiErr.NewNestedError()
-	nesetedError.Reason = NestedErrorUserDoesntExist
-	nesetedError.Message = message
-
+	apiErr.NewNestedError(NestedErrorUserDoesntExist, message)
 	return apiErr
 }
 
@@ -188,12 +181,9 @@ func NewRequiredFieldError(fields []string) *APIError {
 	apiErr.SetErrorType(ErrorTypeUnprocessable)
 
 	for _, fieldName := range fields {
-		nesetedError := apiErr.NewNestedError()
-		nesetedError.Reason = NestedErrorFieldMissing
+		nesetedError := apiErr.NewNestedError(NestedErrorFieldMissing, "Required field missing")
 		nesetedError.Field = fieldName
-		nesetedError.Message = "Required field missing"
 	}
-
 	return apiErr
 }
 
@@ -203,11 +193,8 @@ func NewInvalidFieldError(fieldName, message string) *APIError {
 	apiErr := &APIError{}
 	apiErr.SetErrorType(ErrorTypeUnprocessable)
 
-	nesetedError := apiErr.NewNestedError()
-	nesetedError.Reason = NestedErrorFieldInvalid
+	nesetedError := apiErr.NewNestedError(NestedErrorFieldInvalid, message)
 	nesetedError.Field = fieldName
-	nesetedError.Message = message
-
 	return apiErr
 }
 
@@ -217,10 +204,7 @@ func NewJSONDecodingError(err error) *APIError {
 	apiErr := &APIError{}
 	apiErr.SetErrorType(ErrorTypeBadRequest)
 
-	nesetedError := apiErr.NewNestedError()
-	nesetedError.Reason = NestedErrorJSONFailure
-	nesetedError.Message = "Request body decoding failed"
+	nesetedError := apiErr.NewNestedError(NestedErrorJSONFailure, "Request body decoding failed")
 	nesetedError.OriginalError = err
-
 	return apiErr
 }

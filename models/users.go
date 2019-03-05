@@ -69,10 +69,7 @@ func (user *User) Create(referenceKey string) *cigExchange.APIError {
 			if existingUser.Verified > 0 {
 				apiErr = &cigExchange.APIError{}
 				apiErr.SetErrorType(cigExchange.ErrorTypeUnauthorized)
-
-				nesetedError := apiErr.NewNestedError()
-				nesetedError.Reason = cigExchange.NestedErrorUserAlreadyExists
-				nesetedError.Message = "User already exists and is verified"
+				apiErr.NewNestedError(cigExchange.NestedErrorUserAlreadyExists, "User already exists and is verified")
 				return apiErr
 			}
 

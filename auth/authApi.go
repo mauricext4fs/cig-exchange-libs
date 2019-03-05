@@ -29,8 +29,14 @@ type userResponse struct {
 	UUID string `json:"uuid"`
 }
 
-type verifyCodeResponse struct {
-	JWT string `json:"jwt"`
+func (resp *userResponse) randomUUID() {
+	UUID, err := uuid.NewV4()
+	if err != nil {
+		// uuid for an unlikely event of NewV4 failure
+		resp.UUID = "fdb283d4-7341-4517-b501-371d22d27cfc"
+		return
+	}
+	resp.UUID = UUID.String()
 }
 
 type verificationCodeRequest struct {
@@ -63,16 +69,6 @@ func (user *userRequest) convertRequestToUser() *models.User {
 	mUser.LoginPhone = &models.Contact{Type: "phone", Level: "secondary", Value1: user.PhoneCountryCode, Value2: user.PhoneNumber}
 
 	return mUser
-}
-
-func (resp *userResponse) randomUUID() {
-	UUID, err := uuid.NewV4()
-	if err != nil {
-		// uuid for an unlikely event of NewV4 failure
-		resp.UUID = "fdb283d4-7341-4517-b501-371d22d27cfc"
-		return
-	}
-	resp.UUID = UUID.String()
 }
 
 // UserAPI stores site based variables
@@ -384,9 +380,7 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	// prepare the default response to send (unauthorized / invalid code)
 	secureErrorResponse := &cigExchange.APIError{}
 	secureErrorResponse.SetErrorType(cigExchange.ErrorTypeUnauthorized)
-	nestedError := secureErrorResponse.NewNestedError()
-	nestedError.Reason = cigExchange.NestedErrorFieldInvalid
-	nestedError.Message = "Invalid code"
+	secureErrorResponse.NewNestedError(cigExchange.NestedErrorFieldInvalid, "Invalid code")
 
 	reqStruct := &verificationCodeRequest{}
 	// decode verificationCodeRequest object from request body
@@ -492,6 +486,10 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 		fmt.Println(err.Error())
 		cigExchange.RespondWithAPIError(w, secureErrorResponse)
 		return
+	}
+
+	type verifyCodeResponse struct {
+		JWT string `json:"jwt"`
 	}
 
 	resp := &verifyCodeResponse{JWT: tokenString}
