@@ -18,6 +18,7 @@ var db *gorm.DB
 var redisD *redis.Client
 var twilioOTP *twilio.OTP
 var mandrillClient *gochimp.MandrillAPI
+var isDevEnvironment bool
 
 func init() {
 
@@ -27,6 +28,11 @@ func init() {
 	err := godotenv.Load()
 	if err != nil {
 		fmt.Print(err)
+	}
+
+	// Determine environment type
+	if os.Getenv("ENV") == "dev" {
+		isDevEnvironment = true
 	}
 
 	// Twilio Init
@@ -102,4 +108,9 @@ func GetTwilio() *twilio.OTP {
 // GetMandrill returns a mandrill object singletone
 func GetMandrill() *gochimp.MandrillAPI {
 	return mandrillClient
+}
+
+// IsDevEnv returns true for development environment
+func IsDevEnv() bool {
+	return isDevEnvironment
 }
