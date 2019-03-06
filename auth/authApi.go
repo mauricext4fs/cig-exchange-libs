@@ -324,54 +324,77 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// respond with 204
-	w.WriteHeader(204)
+	user, apiError := models.GetUser(reqStruct.UUID)
+	if apiError != nil {
+		fmt.Println(apiError.ToString())
+		if apiError.ShouldSilenceError() {
+			// respond with 204
+			w.WriteHeader(204)
+		} else {
+			cigExchange.RespondWithAPIError(w, apiError)
+		}
+		return
+	}
 
-	// process the send OTP async so that client won't see any email sending delays
-	go func() {
-		user, apiError := models.GetUser(reqStruct.UUID)
-		if apiError != nil {
-			fmt.Println(apiError.ToString())
+	// check that we received 'type' parameter
+	if len(reqStruct.Type) == 0 {
+		apiError := cigExchange.NewRequiredFieldError([]string{"type"})
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
+	// send code to email or phone number
+	if reqStruct.Type == "phone" {
+		if user.LoginPhone == nil {
+			apiError = cigExchange.NewInvalidFieldError("type", "User doesn't have phone contact")
+			fmt.Printf(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
-
-		// send code to email or phone number
-		if reqStruct.Type == "phone" {
-			if user.LoginPhone == nil {
-				fmt.Println("SendCode: User doesn't have phone contact")
-				return
-			}
+		// process the send OTP async so that client won't see any delays
+		go func() {
 			twilioClient := cigExchange.GetTwilio()
 			_, err = twilioClient.ReceiveOTP(user.LoginPhone.Value1, user.LoginPhone.Value2)
 			if err != nil {
 				fmt.Println("SendCode: twillio error:")
 				fmt.Println(err.Error())
 			}
-		} else if reqStruct.Type == "email" {
-			if user.LoginEmail == nil {
-				fmt.Println("SendCode: User doesn't have email contact")
-				return
-			}
-			rediskey := cigExchange.GenerateRedisKey(reqStruct.UUID)
-			expiration := 5 * time.Minute
+		}()
+	} else if reqStruct.Type == "email" {
+		if user.LoginEmail == nil {
+			apiError = cigExchange.NewInvalidFieldError("type", "User doesn't have email")
+			fmt.Printf(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
+			return
+		}
+		rediskey := cigExchange.GenerateRedisKey(reqStruct.UUID)
+		expiration := 5 * time.Minute
 
-			code := cigExchange.RandCode(6)
-			err = cigExchange.GetRedis().Set(rediskey, code, expiration).Err()
-			if err != nil {
-				fmt.Println("SendCode: redis error:")
-				fmt.Println(err.Error())
-				return
-			}
+		code := cigExchange.RandCode(6)
+		redisCmd := cigExchange.GetRedis().Set(rediskey, code, expiration)
+		if redisCmd.Err() != nil {
+			apiError = cigExchange.NewRedisError("Set code failure", redisCmd.Err())
+			fmt.Printf(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
+			return
+		}
+		// process the send OTP async so that client won't see any delays
+		go func() {
 			err = sendEmail(emailTypePinCode, user.LoginEmail.Value1, code)
 			if err != nil {
 				fmt.Println("SendCode: email sending error:")
 				fmt.Println(err.Error())
 				return
 			}
-		} else {
-			fmt.Println("SendCode: Error: unsupported otp type")
-		}
-	}()
+		}()
+	} else {
+		apiError = cigExchange.NewInvalidFieldError("type", "Invalid otp type")
+		fmt.Printf(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+	w.WriteHeader(204)
 }
 
 // VerifyCodeHandler handles POST api/users/verify_otp endpoint
@@ -416,6 +439,14 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	// check that we received 'type' parameter
+	if len(reqStruct.Type) == 0 {
+		apiError := cigExchange.NewRequiredFieldError([]string{"type"})
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
 	// verify code
 	if reqStruct.Type == "phone" {
 		if user.LoginPhone == nil {
@@ -455,7 +486,7 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 			return
 		}
 	} else {
-		apiError = cigExchange.NewRequiredFieldError([]string{"email", "phone_number", "phone_country_code"})
+		apiError = cigExchange.NewInvalidFieldError("type", "Invalid otp type")
 		fmt.Printf(apiError.ToString())
 		cigExchange.RespondWithAPIError(w, apiError)
 		return
