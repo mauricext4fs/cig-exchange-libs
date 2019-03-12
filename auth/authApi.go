@@ -388,6 +388,14 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		}()
+
+		// in "DEV" environment we return the email signup code for testing purposes
+		if cigExchange.IsDevEnv() {
+			resp := make(map[string]string, 0)
+			resp["code"] = code
+			cigExchange.Respond(w, resp)
+			return
+		}
 	} else {
 		apiError = cigExchange.NewInvalidFieldError("type", "Invalid otp type")
 		fmt.Printf(apiError.ToString())
