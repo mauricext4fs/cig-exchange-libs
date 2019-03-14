@@ -11,19 +11,19 @@ import (
 
 // User is a struct to represent a user
 type User struct {
-	ID             string     `gorm:"column:id;primary_key"`
-	Sex            string     `gorm:"column:sex"`
-	Role           string     `gorm:"column:role"`
-	Name           string     `gorm:"column:name"`
-	LastName       string     `gorm:"column:lastname"`
-	LoginEmail     *Contact   `gorm:"foreignkey:LoginEmailUUID;association_foreignkey:ID"`
-	LoginEmailUUID *string    `gorm:"column:login_email"`
-	LoginPhone     *Contact   `gorm:"foreignkey:LoginPhoneUUID;association_foreignkey:ID"`
-	LoginPhoneUUID *string    `gorm:"column:login_phone"`
-	Verified       int64      `gorm:"column:verified"`
-	CreatedAt      time.Time  `gorm:"column:created_at"`
-	UpdatedAt      time.Time  `gorm:"column:updated_at"`
-	DeletedAt      *time.Time `gorm:"column:deleted_at"`
+	ID             string     `json:"id" gorm:"column:id;primary_key"`
+	Sex            string     `json:"sex" gorm:"column:sex"`
+	Role           string     `json:"-" gorm:"column:role"`
+	Name           string     `json:"name" gorm:"column:name"`
+	LastName       string     `json:"last_name" gorm:"column:lastname"`
+	LoginEmail     *Contact   `json:"-" gorm:"foreignkey:LoginEmailUUID;association_foreignkey:ID"`
+	LoginEmailUUID *string    `json:"-" gorm:"column:login_email"`
+	LoginPhone     *Contact   `json:"-" gorm:"foreignkey:LoginPhoneUUID;association_foreignkey:ID"`
+	LoginPhoneUUID *string    `json:"-" gorm:"column:login_phone"`
+	Verified       int64      `json:"-" gorm:"column:verified"`
+	CreatedAt      time.Time  `json:"-" gorm:"column:created_at"`
+	UpdatedAt      time.Time  `json:"-" gorm:"column:updated_at"`
+	DeletedAt      *time.Time `json:"-" gorm:"column:deleted_at"`
 }
 
 // TableName returns table name for struct
@@ -61,7 +61,7 @@ func (user *User) Create(referenceKey string) *cigExchange.APIError {
 	if db.Error != nil {
 		// we expect record not found error here
 		if !db.RecordNotFound() {
-			return cigExchange.NewGormError("Contact lookup failed", db.Error)
+			return cigExchange.NewDatabaseError("Contact lookup failed", db.Error)
 		}
 	} else {
 		existingUser := &User{}
@@ -69,7 +69,7 @@ func (user *User) Create(referenceKey string) *cigExchange.APIError {
 			if existingUser.Verified > 0 {
 				apiErr = &cigExchange.APIError{}
 				apiErr.SetErrorType(cigExchange.ErrorTypeUnauthorized)
-				apiErr.NewNestedError(cigExchange.NestedErrorUserAlreadyExists, "User already exists and is verified")
+				apiErr.NewNestedError(cigExchange.ReasonUserAlreadyExists, "User already exists and is verified")
 				return apiErr
 			}
 
@@ -81,13 +81,13 @@ func (user *User) Create(referenceKey string) *cigExchange.APIError {
 			// delete unverified user
 			err := cigExchange.GetDB().Delete(existingUser).Error
 			if err != nil {
-				return cigExchange.NewGormError("Delete user call failed", err)
+				return cigExchange.NewDatabaseError("Delete user call failed", err)
 			}
 
 			// delete organization user connections
 			err = cigExchange.GetDB().Where(orgUserWhere).Delete(OrganisationUser{}).Error
 			if err != nil {
-				return cigExchange.NewGormError("Delete organization user links call failed", err)
+				return cigExchange.NewDatabaseError("Delete organization user links call failed", err)
 			}
 		}
 		// reuse the contact
@@ -124,7 +124,7 @@ func (user *User) Create(referenceKey string) *cigExchange.APIError {
 			if db.RecordNotFound() {
 				apiErr = cigExchange.NewInvalidFieldError("reference_key", "Organisation reference key is invalid")
 			} else {
-				apiErr = cigExchange.NewGormError("Organization lookup failed", db.Error)
+				apiErr = cigExchange.NewDatabaseError("Organization lookup failed", db.Error)
 			}
 			return apiErr
 		}
@@ -132,7 +132,7 @@ func (user *User) Create(referenceKey string) *cigExchange.APIError {
 
 	err := cigExchange.GetDB().Create(user).Error
 	if err != nil {
-		return cigExchange.NewGormError("Create user call failed", err)
+		return cigExchange.NewDatabaseError("Create user call failed", err)
 	}
 
 	// create organisation link for the user if necessary
@@ -143,7 +143,7 @@ func (user *User) Create(referenceKey string) *cigExchange.APIError {
 		}
 		err = cigExchange.GetDB().Create(orgUser).Error
 		if err != nil {
-			return cigExchange.NewGormError("Create organization user link call failed", err)
+			return cigExchange.NewDatabaseError("Create organization user link call failed", err)
 		}
 	}
 
@@ -155,7 +155,7 @@ func (user *User) Save() *cigExchange.APIError {
 
 	err := cigExchange.GetDB().Save(user).Error
 	if err != nil {
-		return cigExchange.NewGormError("Save user call failed", err)
+		return cigExchange.NewDatabaseError("Save user call failed", err)
 	}
 	return nil
 }
@@ -177,7 +177,7 @@ func GetUser(UUID string) (user *User, apiErr *cigExchange.APIError) {
 		if db.RecordNotFound() {
 			apiErr = cigExchange.NewUserDoesntExistError("User with provided uuid doesn't exist")
 		} else {
-			apiErr = cigExchange.NewGormError("User lookup failed", db.Error)
+			apiErr = cigExchange.NewDatabaseError("User lookup failed", db.Error)
 		}
 		return
 	}
@@ -201,7 +201,7 @@ func GetUserByEmail(email string) (user *User, apiErr *cigExchange.APIError) {
 		if db.RecordNotFound() {
 			apiErr = cigExchange.NewUserDoesntExistError("User with provided email doesn't exist")
 		} else {
-			apiErr = cigExchange.NewGormError("Contact lookup failed", db.Error)
+			apiErr = cigExchange.NewDatabaseError("Contact lookup failed", db.Error)
 		}
 		return
 	}
@@ -212,7 +212,7 @@ func GetUserByEmail(email string) (user *User, apiErr *cigExchange.APIError) {
 		if db.RecordNotFound() {
 			apiErr = cigExchange.NewUserDoesntExistError("User with provided email doesn't exist")
 		} else {
-			apiErr = cigExchange.NewGormError("User lookup failed", db.Error)
+			apiErr = cigExchange.NewDatabaseError("User lookup failed", db.Error)
 		}
 		return
 	}
@@ -246,7 +246,7 @@ func GetUserByMobile(code, number string) (user *User, apiErr *cigExchange.APIEr
 		if db.RecordNotFound() {
 			apiErr = cigExchange.NewUserDoesntExistError("User with provided phone number doesn't exist")
 		} else {
-			apiErr = cigExchange.NewGormError("Contact lookup failed", db.Error)
+			apiErr = cigExchange.NewDatabaseError("Contact lookup failed", db.Error)
 		}
 		return
 	}
@@ -257,7 +257,7 @@ func GetUserByMobile(code, number string) (user *User, apiErr *cigExchange.APIEr
 		if db.RecordNotFound() {
 			apiErr = cigExchange.NewUserDoesntExistError("User with provided phone number doesn't exist")
 		} else {
-			apiErr = cigExchange.NewGormError("User lookup failed", db.Error)
+			apiErr = cigExchange.NewDatabaseError("User lookup failed", db.Error)
 		}
 		return
 	}
