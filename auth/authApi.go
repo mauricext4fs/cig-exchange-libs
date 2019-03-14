@@ -71,16 +71,9 @@ func (user *userRequest) convertRequestToUser() *models.User {
 	return mUser
 }
 
-// UserAPI stores site based variables
+// UserAPI handles JWT auth and user management api calls
 type UserAPI struct {
-	Platform string
-	BaseURI  string
-	SkipJWT  []string
-}
-
-// NewUserAPI creates UserApi instance
-func NewUserAPI(platform, baseURI string, skipJWT []string) *UserAPI {
-	return &UserAPI{Platform: platform, BaseURI: baseURI, SkipJWT: skipJWT}
+	SkipJWT []string
 }
 
 // LoggedInUser is passed to controllers after jwt auth
@@ -140,9 +133,9 @@ func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler
 		requestPath := r.URL.Path
 
 		// check if request does not need authentication, serve the request if it doesn't need it
-		for _, value := range userAPI.SkipJWT {
+		for _, path := range userAPI.SkipJWT {
 
-			if requestPath == userAPI.BaseURI+value {
+			if requestPath == path {
 				next.ServeHTTP(w, r)
 				return
 			}
