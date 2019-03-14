@@ -1,6 +1,8 @@
 package models
 
 import (
+	"cig-exchange-libs"
+	"fmt"
 	"time"
 
 	"github.com/jinzhu/gorm"
@@ -46,4 +48,48 @@ type OrganisationUser struct {
 // TableName returns table name for struct
 func (*OrganisationUser) TableName() string {
 	return "organisation_user"
+}
+
+// Delete existing offering object in db
+func (orgUser *OrganisationUser) Delete() *cigExchange.APIError {
+
+	// check that both ID's are set
+	if len(orgUser.UserID) == 0 {
+		return cigExchange.NewInvalidFieldError("user_id", "UserID is invalid")
+	}
+	if len(orgUser.OrganisationID) == 0 {
+		return cigExchange.NewInvalidFieldError("organization_id", "OrganisationID is invalid")
+	}
+
+	err := cigExchange.GetDB().Delete(orgUser).Error
+	if err != nil {
+		return cigExchange.NewDatabaseError("Error deleting organisation user", err)
+	}
+	return nil
+}
+
+// GetUsersForOrganisation queries all users for organisation from db
+func GetUsersForOrganisation(organisationID string) (users []*User, apiErr *cigExchange.APIError) {
+
+	var orgUsers []OrganisationUser
+
+	// find all organisationUser objects for organisation
+	cigExchange.GetDB().Where(&OrganisationUser{OrganisationID: organisationID}).Find(&orgUsers)
+
+	for _, orgUser := range orgUsers {
+		var user User
+		db := cigExchange.GetDB().Where(&User{ID: orgUser.UserID}).First(&user)
+		if db.Error != nil {
+			if db.RecordNotFound() {
+				apiErr = cigExchange.NewDatabaseError("User lookup failed", fmt.Errorf("User doesn't exist for organisation_user record"))
+			} else {
+				apiErr = cigExchange.NewDatabaseError("User lookup failed", db.Error)
+			}
+			return
+		}
+		// add user to response
+		users = append(users, &user)
+	}
+
+	return
 }

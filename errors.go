@@ -17,24 +17,23 @@ var NotFoundHandler = func(next http.Handler) http.Handler {
 
 // top level API Error types
 const (
-	ErrorTypeBadRequest      = "Bad request"
-	ErrorTypeUnauthorized    = "Unauthorized"
-	ErrorTypeUnprocessable   = "Unprocessable entity"
-	ErrorTypeDatabaseFailure = "Database error"
-	ErrorTypeRedisFailure    = "Redis error"
-	ErrorTypeTwilioFailure   = "Twilio error"
+	ErrorTypeBadRequest     = "Bad request"
+	ErrorTypeUnauthorized   = "Unauthorized"
+	ErrorTypeInternalServer = "Internal server error"
 )
 
 // nested API Error reasons
 const (
-	NestedErrorUserAlreadyExists = "User already exists"
-	NestedErrorUserDoesntExist   = "User doesn't exist"
-	NestedErrorFieldMissing      = "Missing field"
-	NestedErrorFieldInvalid      = "Invalid field"
-	NestedErrorGormFailure       = "GORM failure"
-	NestedErrorRedisFailure      = "Redis failure"
-	NestedErrorTwilioFailure     = "Twilio failure"
-	NestedErrorJSONFailure       = "JSON decoding failure"
+	ReasonUserAlreadyExists = "User already exists"
+	ReasonUserDoesntExist   = "User doesn't exist"
+	ReasonNotAllowed        = "Not allowed / wrong permissions"
+	ReasonFieldMissing      = "Required field missing"
+	ReasonFieldInvalid      = "Invalid field"
+	ReasonJSONFailure       = "JSON decoding failure"
+	ReasonDatabaseFailure   = "Database error"
+	ReasonRedisFailure      = "Redis error"
+	ReasonTwilioFailure     = "Twilio error"
+	ReasonRoutingFailure    = "Routing error"
 )
 
 // APIError is a custom error type that gets reported to the client
@@ -77,14 +76,12 @@ func (e *APIError) SetErrorType(errType string) {
 		e.Code = 400
 	case ErrorTypeUnauthorized:
 		e.Code = 401
-	case ErrorTypeUnprocessable:
-		e.Code = 422
-	case ErrorTypeDatabaseFailure:
-	case ErrorTypeRedisFailure:
-		e.Code = 503
+	case ErrorTypeInternalServer:
+		e.Code = 500
 	default:
 		// 500 is the default for any uncategorized errors
 		e.Code = 500
+		e.Message = "Unknown server error"
 	}
 }
 
@@ -98,12 +95,12 @@ func (e *APIError) ShouldSilenceError() bool {
 	}
 
 	// silense "Unauthorized : User Already Exists" error
-	if e.Type == ErrorTypeUnauthorized && e.Errors[0].Reason == NestedErrorUserAlreadyExists {
+	if e.Type == ErrorTypeUnauthorized && e.Errors[0].Reason == ReasonUserAlreadyExists {
 		return true
 	}
 
 	// silense "Unauthorized : User Doesn't Exist" error
-	if e.Type == ErrorTypeUnauthorized && e.Errors[0].Reason == NestedErrorUserDoesntExist {
+	if e.Type == ErrorTypeUnauthorized && e.Errors[0].Reason == ReasonUserDoesntExist {
 		return true
 	}
 
@@ -128,83 +125,103 @@ func (e *APIError) ToString() string {
 
 // Helper functions for creating specific errors
 
-// NewGormError creates APIError with ErrorTypeDatabaseFailure
-// and nested error with NestedErrorGormFailure reason
-func NewGormError(message string, err error) *APIError {
+// NewDatabaseError creates APIError with ErrorTypeInternalServer
+// and nested error with ReasonDatabaseFailure reason
+func NewDatabaseError(message string, err error) *APIError {
 	apiErr := &APIError{}
-	apiErr.SetErrorType(ErrorTypeDatabaseFailure)
+	apiErr.SetErrorType(ErrorTypeInternalServer)
 
-	nesetedError := apiErr.NewNestedError(NestedErrorGormFailure, message)
+	nesetedError := apiErr.NewNestedError(ReasonDatabaseFailure, message)
 	nesetedError.OriginalError = err
 
 	return apiErr
 }
 
-// NewRedisError creates APIError with ErrorTypeRedisFailure
-// and nested error with NestedErrorRedisFailure reason
+// NewRedisError creates APIError with ErrorTypeInternalServer
+// and nested error with ReasonRedisFailure reason
 func NewRedisError(message string, err error) *APIError {
 	apiErr := &APIError{}
-	apiErr.SetErrorType(ErrorTypeRedisFailure)
+	apiErr.SetErrorType(ErrorTypeInternalServer)
 
-	nesetedError := apiErr.NewNestedError(NestedErrorRedisFailure, message)
+	nesetedError := apiErr.NewNestedError(ReasonRedisFailure, message)
 	nesetedError.OriginalError = err
 
 	return apiErr
 }
 
-// NewTwilioError creates APIError with ErrorTypeTwilioFailure
-// and nested error with NestedErrorTwilioFailure reason
+// NewTwilioError creates APIError with ErrorTypeInternalServer
+// and nested error with ReasonTwilioFailure reason
 func NewTwilioError(message string, err error) *APIError {
 	apiErr := &APIError{}
-	apiErr.SetErrorType(ErrorTypeTwilioFailure)
+	apiErr.SetErrorType(ErrorTypeInternalServer)
 
-	nesetedError := apiErr.NewNestedError(NestedErrorTwilioFailure, message)
+	nesetedError := apiErr.NewNestedError(ReasonTwilioFailure, message)
 	nesetedError.OriginalError = err
 
+	return apiErr
+}
+
+// NewRoutingError creates APIError with ErrorTypeInternalServer
+// and nested error with NestedErrorJSONFailure reason
+func NewRoutingError(err error) *APIError {
+	apiErr := &APIError{}
+	apiErr.SetErrorType(ErrorTypeInternalServer)
+
+	nesetedError := apiErr.NewNestedError(ReasonRoutingFailure, "Unexpected routing error")
+	nesetedError.OriginalError = err
 	return apiErr
 }
 
 // NewUserDoesntExistError creates APIError with ErrorTypeUnauthorized
-// and nested error with NestedErrorUserDoesntExist reason
+// and nested error with ReasonUserDoesntExist reason
 // This error is silenced by default (not shown to the client by authAPI)
 func NewUserDoesntExistError(message string) *APIError {
 	apiErr := &APIError{}
 	apiErr.SetErrorType(ErrorTypeUnauthorized)
-	apiErr.NewNestedError(NestedErrorUserDoesntExist, message)
+	apiErr.NewNestedError(ReasonUserDoesntExist, message)
 	return apiErr
 }
 
-// NewRequiredFieldError creates APIError with ErrorTypeUnprocessable
+// NewAccessRightsError creates APIError with ErrorTypeUnauthorized
+// and nested error with ReasonNotAllowed reason
+func NewAccessRightsError(message string) *APIError {
+	apiErr := &APIError{}
+	apiErr.SetErrorType(ErrorTypeUnauthorized)
+	apiErr.NewNestedError(ReasonNotAllowed, message)
+	return apiErr
+}
+
+// NewRequiredFieldError creates APIError with ErrorTypeBadRequest
 // and nested error(s) with NestedErrorFieldMissing reason and filled field name
 func NewRequiredFieldError(fields []string) *APIError {
 	apiErr := &APIError{}
-	apiErr.SetErrorType(ErrorTypeUnprocessable)
+	apiErr.SetErrorType(ErrorTypeBadRequest)
 
 	for _, fieldName := range fields {
-		nesetedError := apiErr.NewNestedError(NestedErrorFieldMissing, "Required field missing")
+		nesetedError := apiErr.NewNestedError(ReasonFieldMissing, "Required field missing")
 		nesetedError.Field = fieldName
 	}
 	return apiErr
 }
 
-// NewInvalidFieldError creates APIError with ErrorTypeUnprocessable
-// and nested error with NestedErrorFieldInvalid reason with filled message and field name
+// NewInvalidFieldError creates APIError with ErrorTypeBadRequest
+// and nested error with ReasonFieldInvalid reason with filled message and field name
 func NewInvalidFieldError(fieldName, message string) *APIError {
 	apiErr := &APIError{}
-	apiErr.SetErrorType(ErrorTypeUnprocessable)
+	apiErr.SetErrorType(ErrorTypeBadRequest)
 
-	nesetedError := apiErr.NewNestedError(NestedErrorFieldInvalid, message)
+	nesetedError := apiErr.NewNestedError(ReasonFieldInvalid, message)
 	nesetedError.Field = fieldName
 	return apiErr
 }
 
-// NewJSONDecodingError creates APIError with NewBadRequestError
+// NewJSONDecodingError creates APIError with ErrorTypeBadRequest
 // and nested error with NestedErrorJSONFailure reason
 func NewJSONDecodingError(err error) *APIError {
 	apiErr := &APIError{}
 	apiErr.SetErrorType(ErrorTypeBadRequest)
 
-	nesetedError := apiErr.NewNestedError(NestedErrorJSONFailure, "Request body decoding failed")
+	nesetedError := apiErr.NewNestedError(ReasonJSONFailure, "Request body decoding failed")
 	nesetedError.OriginalError = err
 	return apiErr
 }

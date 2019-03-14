@@ -404,7 +404,7 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	// prepare the default response to send (unauthorized / invalid code)
 	secureErrorResponse := &cigExchange.APIError{}
 	secureErrorResponse.SetErrorType(cigExchange.ErrorTypeUnauthorized)
-	secureErrorResponse.NewNestedError(cigExchange.NestedErrorFieldInvalid, "Invalid code")
+	secureErrorResponse.NewNestedError(cigExchange.ReasonFieldInvalid, "Invalid code")
 
 	reqStruct := &verificationCodeRequest{}
 	// decode verificationCodeRequest object from request body
@@ -433,7 +433,7 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	if db.Error != nil {
 		// organization can be missed
 		if !db.RecordNotFound() {
-			apiError = cigExchange.NewGormError("Organization user links lookup failed", db.Error)
+			apiError = cigExchange.NewDatabaseError("Organization user links lookup failed", db.Error)
 			fmt.Printf(apiError.ToString())
 			cigExchange.RespondWithAPIError(w, apiError)
 			return
