@@ -539,14 +539,17 @@ func sendEmail(eType emailType, email, pinCode string) error {
 
 	mandrillClient := cigExchange.GetMandrill()
 
+	subject := ""
 	templateName := ""
 	mergeVars := make([]gochimp.Var, 0)
 
 	switch eType {
 	case emailTypeWelcome:
 		templateName = "welcome"
+		subject = "Welcome aboard!"
 	case emailTypePinCode:
 		templateName = "pin-code"
+		subject = "CIG Exchange Verification Code"
 		mVar := gochimp.Var{
 			Name:    "pincode",
 			Content: pinCode,
@@ -581,7 +584,7 @@ func sendEmail(eType emailType, email, pinCode string) error {
 
 	message := gochimp.Message{
 		Html:      renderedTemplate,
-		Subject:   "Welcome aboard!",
+		Subject:   subject,
 		FromEmail: "noreply@cig-exchange.ch",
 		FromName:  "CIG Exchange",
 		To:        recipients,
