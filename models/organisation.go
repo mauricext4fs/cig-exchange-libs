@@ -16,7 +16,6 @@ type Organisation struct {
 	Type                      string     `json:"type" gorm:"column:type"`
 	Name                      string     `json:"name" gorm:"column:name"`
 	Website                   string     `json:"website" gorm:"column:website"`
-	MainContactPerson         string     `json:"main_contact_person" gorm:"column:main_contact_person"`
 	ReferenceKey              string     `json:"reference_key" gorm:"column:reference_key"`
 	OfferingRatingDescription string     `json:"offering_rating_description" gorm:"column:offering_rating_description"`
 	Verified                  int64      `json:"verified" gorm:"column:verified"`
