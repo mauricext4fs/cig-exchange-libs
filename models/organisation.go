@@ -1,7 +1,7 @@
 package models
 
 import (
-	"cig-exchange-libs"
+	cigExchange "cig-exchange-libs"
 	"fmt"
 	"time"
 
@@ -41,8 +41,11 @@ func (*Organisation) BeforeCreate(scope *gorm.Scope) error {
 
 // OrganisationUser is a struct to represent an organisation to user link
 type OrganisationUser struct {
-	OrganisationID string `gorm:"column:organisation_id"`
-	UserID         string `gorm:"column:user_id"`
+	OrganisationID string     `gorm:"column:organisation_id"`
+	UserID         string     `gorm:"column:user_id"`
+	CreatedAt      time.Time  `gorm:"column:created_at"`
+	UpdatedAt      time.Time  `gorm:"column:updated_at"`
+	DeletedAt      *time.Time `gorm:"column:deleted_at"`
 }
 
 // TableName returns table name for struct
