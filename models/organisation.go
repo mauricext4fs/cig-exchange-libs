@@ -81,9 +81,12 @@ func (organisation *Organisation) Delete() *cigExchange.APIError {
 		return cigExchange.NewInvalidFieldError("organisation_id", "Invalid organisation id")
 	}
 
-	err := cigExchange.GetDB().Delete(organisation).Error
-	if err != nil {
-		return cigExchange.NewDatabaseError("Failed to delete organisation", err)
+	db := cigExchange.GetDB().Delete(organisation)
+	if db.Error != nil {
+		return cigExchange.NewDatabaseError("Failed to delete organisation", db.Error)
+	}
+	if db.RowsAffected == 0 {
+		return cigExchange.NewInvalidFieldError("organisation_id", "Organisation with provided id doesn't exist")
 	}
 	return nil
 }
@@ -169,7 +172,7 @@ func (orgUser *OrganisationUser) Create() *cigExchange.APIError {
 	return nil
 }
 
-// Delete existing offering object in db
+// Delete existing organisation user object in db
 func (orgUser *OrganisationUser) Delete() *cigExchange.APIError {
 
 	// check that both ID's are set
@@ -180,9 +183,12 @@ func (orgUser *OrganisationUser) Delete() *cigExchange.APIError {
 		return cigExchange.NewInvalidFieldError("organization_id", "OrganisationID is invalid")
 	}
 
-	err := cigExchange.GetDB().Delete(orgUser).Error
-	if err != nil {
-		return cigExchange.NewDatabaseError("Error deleting organisation user", err)
+	db := cigExchange.GetDB().Delete(orgUser)
+	if db.Error != nil {
+		return cigExchange.NewDatabaseError("Error deleting organisation user", db.Error)
+	}
+	if db.RowsAffected == 0 {
+		return cigExchange.NewInvalidFieldError("organisation_id, user_id", "Organisation User doesn't exist")
 	}
 	return nil
 }
