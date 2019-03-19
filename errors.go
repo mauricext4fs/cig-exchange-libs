@@ -24,16 +24,17 @@ const (
 
 // nested API Error reasons
 const (
-	ReasonUserAlreadyExists = "User already exists"
-	ReasonUserDoesntExist   = "User doesn't exist"
-	ReasonNotAllowed        = "Not allowed / wrong permissions"
-	ReasonFieldMissing      = "Required field missing"
-	ReasonFieldInvalid      = "Invalid field"
-	ReasonJSONFailure       = "JSON decoding failure"
-	ReasonDatabaseFailure   = "Database error"
-	ReasonRedisFailure      = "Redis error"
-	ReasonTwilioFailure     = "Twilio error"
-	ReasonRoutingFailure    = "Routing error"
+	ReasonUserAlreadyExists       = "User already exists"
+	ReasonUserDoesntExist         = "User doesn't exist"
+	ReasonOrganisationDoesntExist = "Organisation doesn't exist"
+	ReasonNotAllowed              = "Not allowed / wrong permissions"
+	ReasonFieldMissing            = "Required field missing"
+	ReasonFieldInvalid            = "Invalid field"
+	ReasonJSONFailure             = "JSON decoding failure"
+	ReasonDatabaseFailure         = "Database error"
+	ReasonRedisFailure            = "Redis error"
+	ReasonTwilioFailure           = "Twilio error"
+	ReasonRoutingFailure          = "Routing error"
 )
 
 // APIError is a custom error type that gets reported to the client
@@ -179,6 +180,15 @@ func NewUserDoesntExistError(message string) *APIError {
 	apiErr := &APIError{}
 	apiErr.SetErrorType(ErrorTypeUnauthorized)
 	apiErr.NewNestedError(ReasonUserDoesntExist, message)
+	return apiErr
+}
+
+// NewOrganisationDoesntExistError creates APIError with ErrorTypeBadRequest
+// and nested error with ReasonOrganisationDoesntExist reason
+func NewOrganisationDoesntExistError(message string) *APIError {
+	apiErr := &APIError{}
+	apiErr.SetErrorType(ErrorTypeBadRequest)
+	apiErr.NewNestedError(ReasonOrganisationDoesntExist, message)
 	return apiErr
 }
 
