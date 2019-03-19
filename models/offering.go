@@ -74,8 +74,6 @@ func (offering *Offering) Create() error {
 
 	// invalidate the uuid
 	offering.ID = ""
-	offering.CreatedAt = time.Time{}
-	offering.UpdatedAt = time.Time{}
 
 	if err := offering.Validate(); err != nil {
 		return err
@@ -91,9 +89,6 @@ func (offering *Offering) Update() error {
 	if len(offering.ID) == 0 {
 		return fmt.Errorf("Offering UUID is not set")
 	}
-
-	offering.CreatedAt = time.Time{}
-	offering.UpdatedAt = time.Time{}
 
 	if err := offering.Validate(); err != nil {
 		return err
