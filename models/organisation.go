@@ -140,6 +140,7 @@ func (organisation *Organisation) trimFieldsAndValidate() *cigExchange.APIError 
 
 // OrganisationUser is a struct to represent an organisation to user link
 type OrganisationUser struct {
+	ID               string     `gorm:"column:id;primary_key"`
 	OrganisationID   string     `gorm:"column:organisation_id"`
 	UserID           string     `gorm:"column:user_id"`
 	OrganisationRole string     `gorm:"column:organisation_role"`
@@ -154,8 +155,23 @@ func (*OrganisationUser) TableName() string {
 	return "organisation_user"
 }
 
-// Create inserts new user organisation object into db
+// BeforeCreate generates new unique UUIDs for new db records
+func (*OrganisationUser) BeforeCreate(scope *gorm.Scope) error {
+
+	UUID, err := uuid.NewV4()
+	if err != nil {
+		return err
+	}
+	scope.SetColumn("ID", UUID.String())
+
+	return nil
+}
+
+// Create inserts new organisation user object into db
 func (orgUser *OrganisationUser) Create() *cigExchange.APIError {
+
+	// invalidate the uuid
+	orgUser.ID = ""
 
 	// check that both ID's are set
 	if len(orgUser.UserID) == 0 {
@@ -167,20 +183,30 @@ func (orgUser *OrganisationUser) Create() *cigExchange.APIError {
 
 	db := cigExchange.GetDB().Create(orgUser)
 	if db.Error != nil {
-		return cigExchange.NewDatabaseError("Failed to create organisation user", db.Error)
+		return cigExchange.NewDatabaseError("Create organization user link call failed", db.Error)
 	}
 	return nil
 }
 
-// Delete existing organisation user object in db
+// Find queries organisation user from db
+func (orgUser *OrganisationUser) Find() *cigExchange.APIError {
+
+	db := cigExchange.GetDB().Where(orgUser).First(orgUser)
+	if db.Error != nil {
+		if db.RecordNotFound() {
+			return cigExchange.NewOrganisationUserDoesntExistError("Organisation User with provided parameters doesn't exist")
+		}
+		return cigExchange.NewDatabaseError("Organisation Users lookup failed", db.Error)
+	}
+	return nil
+}
+
+// Delete existing user organisation object in db
 func (orgUser *OrganisationUser) Delete() *cigExchange.APIError {
 
-	// check that both ID's are set
-	if len(orgUser.UserID) == 0 {
-		return cigExchange.NewInvalidFieldError("user_id", "UserID is invalid")
-	}
-	if len(orgUser.OrganisationID) == 0 {
-		return cigExchange.NewInvalidFieldError("organization_id", "OrganisationID is invalid")
+	// check that UUID is set
+	if len(orgUser.ID) == 0 {
+		return cigExchange.NewInvalidFieldError("id", "Invalid organisation user id")
 	}
 
 	db := cigExchange.GetDB().Delete(orgUser)
