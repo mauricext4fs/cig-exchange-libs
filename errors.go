@@ -35,6 +35,7 @@ const (
 	ReasonDatabaseFailure             = "Database error"
 	ReasonRedisFailure                = "Redis error"
 	ReasonTwilioFailure               = "Twilio error"
+	ReasonTokenGenerationFailure      = "JWT generation error"
 	ReasonRoutingFailure              = "Routing error"
 )
 
@@ -158,6 +159,18 @@ func NewTwilioError(message string, err error) *APIError {
 	apiErr.SetErrorType(ErrorTypeInternalServer)
 
 	nesetedError := apiErr.NewNestedError(ReasonTwilioFailure, message)
+	nesetedError.OriginalError = err
+
+	return apiErr
+}
+
+// NewTokenError creates APIError with ErrorTypeInternalServer
+// and nested error with ReasonTokenGenerationFailure reason
+func NewTokenError(message string, err error) *APIError {
+	apiErr := &APIError{}
+	apiErr.SetErrorType(ErrorTypeInternalServer)
+
+	nesetedError := apiErr.NewNestedError(ReasonTokenGenerationFailure, message)
 	nesetedError.OriginalError = err
 
 	return apiErr
