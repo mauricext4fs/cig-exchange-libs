@@ -1,7 +1,7 @@
 package models
 
 import (
-	"cig-exchange-libs"
+	cigExchange "cig-exchange-libs"
 	"strings"
 	"time"
 
@@ -138,12 +138,14 @@ func (user *User) Create(referenceKey string) *cigExchange.APIError {
 	// create organisation link for the user if necessary
 	if len(referenceKey) > 0 {
 		orgUser := &OrganisationUser{
-			UserID:         user.ID,
-			OrganisationID: org.ID,
+			UserID:           user.ID,
+			OrganisationID:   org.ID,
+			IsHome:           false,
+			OrganisationRole: "",
 		}
-		err = cigExchange.GetDB().Create(orgUser).Error
-		if err != nil {
-			return cigExchange.NewDatabaseError("Create organization user link call failed", err)
+		apiErr := orgUser.Create()
+		if apiErr != nil {
+			return apiErr
 		}
 	}
 

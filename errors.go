@@ -24,17 +24,18 @@ const (
 
 // nested API Error reasons
 const (
-	ReasonUserAlreadyExists       = "User already exists"
-	ReasonUserDoesntExist         = "User doesn't exist"
-	ReasonOrganisationDoesntExist = "Organisation doesn't exist"
-	ReasonNotAllowed              = "Not allowed / wrong permissions"
-	ReasonFieldMissing            = "Required field missing"
-	ReasonFieldInvalid            = "Invalid field"
-	ReasonJSONFailure             = "JSON decoding failure"
-	ReasonDatabaseFailure         = "Database error"
-	ReasonRedisFailure            = "Redis error"
-	ReasonTwilioFailure           = "Twilio error"
-	ReasonRoutingFailure          = "Routing error"
+	ReasonUserAlreadyExists           = "User already exists"
+	ReasonUserDoesntExist             = "User doesn't exist"
+	ReasonOrganisationDoesntExist     = "Organisation doesn't exist"
+	ReasonOrganisationUserDoesntExist = "Organisation User doesn't exist"
+	ReasonNotAllowed                  = "Not allowed / wrong permissions"
+	ReasonFieldMissing                = "Required field missing"
+	ReasonFieldInvalid                = "Invalid field"
+	ReasonJSONFailure                 = "JSON decoding failure"
+	ReasonDatabaseFailure             = "Database error"
+	ReasonRedisFailure                = "Redis error"
+	ReasonTwilioFailure               = "Twilio error"
+	ReasonRoutingFailure              = "Routing error"
 )
 
 // APIError is a custom error type that gets reported to the client
@@ -189,6 +190,15 @@ func NewOrganisationDoesntExistError(message string) *APIError {
 	apiErr := &APIError{}
 	apiErr.SetErrorType(ErrorTypeBadRequest)
 	apiErr.NewNestedError(ReasonOrganisationDoesntExist, message)
+	return apiErr
+}
+
+// NewOrganisationUserDoesntExistError creates APIError with ErrorTypeBadRequest
+// and nested error with ReasonOrganisationDoesntExist reason
+func NewOrganisationUserDoesntExistError(message string) *APIError {
+	apiErr := &APIError{}
+	apiErr.SetErrorType(ErrorTypeBadRequest)
+	apiErr.NewNestedError(ReasonOrganisationUserDoesntExist, message)
 	return apiErr
 }
 
