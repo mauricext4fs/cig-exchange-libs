@@ -188,6 +188,28 @@ func (orgUser *OrganisationUser) Create() *cigExchange.APIError {
 	return nil
 }
 
+// Update existing organisation user object in db
+func (orgUser *OrganisationUser) Update() *cigExchange.APIError {
+
+	// check that both ID's are set
+	if len(orgUser.ID) == 0 {
+		return cigExchange.NewInvalidFieldError("id", "ID is invalid")
+	}
+	if len(orgUser.UserID) == 0 {
+		return cigExchange.NewInvalidFieldError("user_id", "UserID is invalid")
+	}
+	if len(orgUser.OrganisationID) == 0 {
+		return cigExchange.NewInvalidFieldError("organization_id", "OrganisationID is invalid")
+	}
+
+	// update OrganisationUser
+	err := cigExchange.GetDB().Model(orgUser).Updates(orgUser).Error
+	if err != nil {
+		return cigExchange.NewDatabaseError("Failed to update organisation user ", err)
+	}
+	return nil
+}
+
 // Find queries organisation user from db
 func (orgUser *OrganisationUser) Find() *cigExchange.APIError {
 
@@ -215,6 +237,44 @@ func (orgUser *OrganisationUser) Delete() *cigExchange.APIError {
 	}
 	if db.RowsAffected == 0 {
 		return cigExchange.NewInvalidFieldError("organisation_id, user_id", "Organisation User doesn't exist")
+	}
+	return nil
+}
+
+// SetHomeOrganisation marks only 1 OrganisationUser as home
+func SetHomeOrganisation(homeOrgUser *OrganisationUser) *cigExchange.APIError {
+
+	// found all OrganisationUser for user
+	orgUsers := make([]*OrganisationUser, 0)
+	db := cigExchange.GetDB().Where(&OrganisationUser{UserID: homeOrgUser.UserID}).Find(&orgUsers)
+	if db.Error != nil {
+		if db.RecordNotFound() {
+			return cigExchange.NewOrganisationUserDoesntExistError("Organisation User with provided parameters doesn't exist")
+		}
+		return cigExchange.NewDatabaseError("Organisation Users lookup failed", db.Error)
+	}
+
+	// modify IsHome field
+	for _, orgUser := range orgUsers {
+		if orgUser.ID == homeOrgUser.ID {
+			if !orgUser.IsHome {
+				// select IsHome in new organisation
+				orgUser.IsHome = true
+				apiError := orgUser.Update()
+				if apiError != nil {
+					return apiError
+				}
+			}
+		} else {
+			if orgUser.IsHome {
+				// deselect IsHome in organisations
+				orgUser.IsHome = false
+				apiError := orgUser.Update()
+				if apiError != nil {
+					return apiError
+				}
+			}
+		}
 	}
 	return nil
 }
