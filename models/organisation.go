@@ -41,6 +41,7 @@ func (*Organisation) BeforeCreate(scope *gorm.Scope) error {
 
 // OrganisationUser is a struct to represent an organisation to user link
 type OrganisationUser struct {
+    ID             string `gorm:"column:id;primary_key"`
 	OrganisationID string `gorm:"column:organisation_id"`
 	UserID         string `gorm:"column:user_id"`
 }
@@ -48,6 +49,18 @@ type OrganisationUser struct {
 // TableName returns table name for struct
 func (*OrganisationUser) TableName() string {
 	return "organisation_user"
+}
+
+// BeforeCreate generates new unique UUIDs for new db records
+func (*OrganisationUser) BeforeCreate(scope *gorm.Scope) error {
+
+	UUID, err := uuid.NewV4()
+	if err != nil {
+		return err
+	}
+	scope.SetColumn("ID", UUID.String())
+
+	return nil
 }
 
 // Delete existing offering object in db
