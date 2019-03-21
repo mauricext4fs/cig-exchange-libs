@@ -211,16 +211,17 @@ func (orgUser *OrganisationUser) Update() *cigExchange.APIError {
 }
 
 // Find queries organisation user from db
-func (orgUser *OrganisationUser) Find() *cigExchange.APIError {
+func (orgUser *OrganisationUser) Find() (organisationUser *OrganisationUser, apiError *cigExchange.APIError) {
 
-	db := cigExchange.GetDB().Where(orgUser).First(orgUser)
+	organisationUser = &OrganisationUser{}
+	db := cigExchange.GetDB().Where(orgUser).First(organisationUser)
 	if db.Error != nil {
 		if db.RecordNotFound() {
-			return cigExchange.NewOrganisationUserDoesntExistError("Organisation User with provided parameters doesn't exist")
+			return nil, cigExchange.NewOrganisationUserDoesntExistError("Organisation User with provided parameters doesn't exist")
 		}
-		return cigExchange.NewDatabaseError("Organisation Users lookup failed", db.Error)
+		return nil, cigExchange.NewDatabaseError("Organisation Users lookup failed", db.Error)
 	}
-	return nil
+	return organisationUser, nil
 }
 
 // Delete existing user organisation object in db

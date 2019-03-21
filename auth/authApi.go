@@ -567,9 +567,12 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 	}
 
 	// find organisation user
-	orgUser := &models.OrganisationUser{ID: organisationID}
+	searchOrgUser := &models.OrganisationUser{
+		OrganisationID: organisationID,
+		UserID:         loggedInUser.UserUUID,
+	}
 
-	apiError := orgUser.Find()
+	orgUser, apiError := searchOrgUser.Find()
 	if apiError != nil {
 		fmt.Println(apiError.ToString())
 		cigExchange.RespondWithAPIError(w, apiError)
