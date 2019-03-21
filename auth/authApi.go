@@ -76,6 +76,35 @@ func (user *userRequest) convertRequestToUser() *models.User {
 	return mUser
 }
 
+type organisationRequest struct {
+	Sex              string `json:"sex"`
+	Name             string `json:"name"`
+	LastName         string `json:"lastname"`
+	Email            string `json:"email"`
+	PhoneCountryCode string `json:"phone_country_code"`
+	PhoneNumber      string `json:"phone_number"`
+	ReferenceKey     string `json:"reference_key"`
+	OrganisationName string `json:"organisation_name"`
+}
+
+func (request *organisationRequest) convertRequestToUserAndOrganisation() (*models.User, *models.Organisation) {
+	mUser := &models.User{}
+
+	mUser.Sex = request.Sex
+	mUser.Role = "Platform"
+	mUser.Name = request.Name
+	mUser.LastName = request.LastName
+
+	mUser.LoginEmail = &models.Contact{Type: "email", Level: "primary", Value1: request.Email}
+	mUser.LoginPhone = &models.Contact{Type: "phone", Level: "secondary", Value1: request.PhoneCountryCode, Value2: request.PhoneNumber}
+
+	mOrganisation := &models.Organisation{}
+	mOrganisation.ReferenceKey = request.ReferenceKey
+	mOrganisation.Name = request.OrganisationName
+
+	return mUser, mOrganisation
+}
+
 // UserAPI handles JWT auth and user management api calls
 type UserAPI struct {
 	SkipJWT []string
@@ -259,6 +288,104 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 		err = sendEmail(emailTypeWelcome, userReq.Email, "")
 		if err != nil {
 			fmt.Println("CreateUser: email sending error:")
+			fmt.Println(err.Error())
+		}
+	}()
+
+	resp.UUID = user.ID
+	cigExchange.Respond(w, resp)
+}
+
+// CreateOrganisationHandler handles POST api/organisations/signup endpoint
+func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http.Request) {
+
+	orgRequest := &organisationRequest{}
+	// decode organisation request object from request body
+	err := json.NewDecoder(r.Body).Decode(orgRequest)
+	if err != nil {
+		apiError := cigExchange.NewJSONDecodingError(err)
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
+	// convert request to User and Organisation structs
+	user, organisation := orgRequest.convertRequestToUserAndOrganisation()
+
+	// prepare silence error response
+	resp := &userResponse{}
+	resp.randomUUID()
+
+	if len(organisation.ReferenceKey) == 0 {
+		apiError := cigExchange.NewInvalidFieldError("reference_key", "Organisation reference key is invalid")
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
+	// check that organisation doesn't exist
+	orgWhere := &models.Organisation{
+		ReferenceKey: organisation.ReferenceKey,
+	}
+	org := &models.Organisation{}
+	db := cigExchange.GetDB().Where(orgWhere).First(org)
+	if db.Error != nil {
+		// handle database error
+		if !db.RecordNotFound() {
+			apiError := cigExchange.NewDatabaseError("Organization lookup failed", db.Error)
+			fmt.Println(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
+			return
+		}
+		// organisation doen't exist
+	} else {
+		// handle wrong reference key
+		apiError := cigExchange.NewInvalidFieldError("reference_key", "Organisation with reference key already exist")
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
+	// try to create user without reference key
+	apiError := user.Create("")
+	if apiError != nil {
+		fmt.Println(apiError.ToString())
+		if apiError.ShouldSilenceError() {
+			cigExchange.Respond(w, resp)
+		} else {
+			cigExchange.RespondWithAPIError(w, apiError)
+		}
+		return
+	}
+
+	// insert organisation into db
+	apiError = organisation.Create()
+	if apiError != nil {
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
+	orgUser := &models.OrganisationUser{
+		UserID:           user.ID,
+		OrganisationID:   organisation.ID,
+		OrganisationRole: "admin",
+		IsHome:           true,
+	}
+
+	// insert organisation user into db
+	apiError = orgUser.Create()
+	if apiError != nil {
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
+	// send welcome email async
+	go func() {
+		err = sendEmail(emailTypeWelcome, orgRequest.Email, "")
+		if err != nil {
+			fmt.Println("CreateOrganisation: email sending error:")
 			fmt.Println(err.Error())
 		}
 	}()

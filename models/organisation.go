@@ -19,8 +19,8 @@ type Organisation struct {
 	ReferenceKey              string     `json:"reference_key" gorm:"column:reference_key"`
 	OfferingRatingDescription string     `json:"offering_rating_description" gorm:"column:offering_rating_description"`
 	Verified                  int64      `json:"verified" gorm:"column:verified"`
-	CreatedAt                 time.Time  `json:"-" gorm:"column:created_at"`
-	UpdatedAt                 time.Time  `json:"-" gorm:"column:updated_at"`
+	CreatedAt                 time.Time  `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt                 time.Time  `json:"updated_at" gorm:"column:updated_at"`
 	DeletedAt                 *time.Time `json:"-" gorm:"column:deleted_at"`
 }
 
@@ -124,9 +124,6 @@ func (organisation *Organisation) trimFieldsAndValidate() *cigExchange.APIError 
 	missingFieldNames := make([]string, 0)
 	if len(organisation.Name) == 0 {
 		missingFieldNames = append(missingFieldNames, "name")
-	}
-	if len(organisation.Type) == 0 {
-		missingFieldNames = append(missingFieldNames, "type")
 	}
 	if len(organisation.ReferenceKey) == 0 {
 		missingFieldNames = append(missingFieldNames, "reference_key")
