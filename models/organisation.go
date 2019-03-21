@@ -296,6 +296,7 @@ func GetOrganisationUsersForOrganisation(organisationID string) (orgUsers []*Org
 // GetUsersForOrganisation queries all users for organisation from db
 func GetUsersForOrganisation(organisationID string) (users []*User, apiErr *cigExchange.APIError) {
 
+	users = make([]*User, 0)
 	var orgUsers []OrganisationUser
 
 	// find all organisationUser objects for organisation
