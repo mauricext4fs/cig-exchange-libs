@@ -801,7 +801,7 @@ func sendEmail(eType emailType, email, pinCode string) error {
 	message := gochimp.Message{
 		Html:      renderedTemplate,
 		Subject:   subject,
-		FromEmail: "noreply@cig-exchange.ch",
+		FromEmail: os.Getenv("FROM_EMAIL"),
 		FromName:  "CIG Exchange",
 		To:        recipients,
 	}
