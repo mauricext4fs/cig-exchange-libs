@@ -2,7 +2,6 @@ package models
 
 import (
 	cigExchange "cig-exchange-libs"
-	"fmt"
 	"time"
 
 	"github.com/jinzhu/gorm"
@@ -49,10 +48,10 @@ func (*Offering) BeforeCreate(scope *gorm.Scope) error {
 
 // Validate checks that:
 // - required fields are pressent and not empty
-func (offering *Offering) Validate() error {
+func (offering *Offering) Validate() *cigExchange.APIError {
 
 	if len(offering.OrganisationID) == 0 {
-		return fmt.Errorf("Required field 'organisation_id' missing")
+		return cigExchange.NewInvalidFieldError("organisation_id", "Required field 'organisation_id' missing")
 	}
 	// check that organisation UUID is valid
 	organization := &Organisation{}
@@ -61,40 +60,49 @@ func (offering *Offering) Validate() error {
 
 		if db.RecordNotFound() {
 			// organisation with UUID doesn't exist
-			return fmt.Errorf("'organisation_id' field is invalid")
+			return cigExchange.NewInvalidFieldError("organisation_id", "Organisation with provided id doesn't exist")
 		}
 		// database error
-		return fmt.Errorf("Database error: %s", db.Error.Error())
+		return cigExchange.NewDatabaseError("Fetch organisation failed", db.Error)
 	}
 	return nil
 }
 
 // Create inserts new offering object into db
-func (offering *Offering) Create() error {
+func (offering *Offering) Create() *cigExchange.APIError {
 
 	// invalidate the uuid
 	offering.ID = ""
 
-	if err := offering.Validate(); err != nil {
-		return err
+	if apiError := offering.Validate(); apiError != nil {
+		return apiError
 	}
 
-	return cigExchange.GetDB().Create(offering).Error
+	db := cigExchange.GetDB().Create(offering)
+	if db.Error != nil {
+		return cigExchange.NewDatabaseError("Create offering failed", db.Error)
+	}
+	return nil
 }
 
 // Update existing offering object in db
-func (offering *Offering) Update() error {
+func (offering *Offering) Update() *cigExchange.APIError {
 
 	// check that UUID is set
 	if len(offering.ID) == 0 {
-		return fmt.Errorf("Offering UUID is not set")
+		return cigExchange.NewInvalidFieldError("offering_id", "Offering UUID is not set")
 	}
 
-	if err := offering.Validate(); err != nil {
-		return err
+	apiError := offering.Validate()
+	if apiError != nil {
+		return apiError
 	}
 
-	return cigExchange.GetDB().Model(offering).Updates(offering).Error
+	db := cigExchange.GetDB().Model(offering).Save(offering)
+	if db.Error != nil {
+		return cigExchange.NewDatabaseError("Failed to update organisation ", db.Error)
+	}
+	return nil
 }
 
 // Delete existing offering object in db
@@ -116,14 +124,20 @@ func (offering *Offering) Delete() *cigExchange.APIError {
 }
 
 // GetOffering queries a single offering from db
-func GetOffering(UUID string) (*Offering, error) {
+func GetOffering(UUID string) (*Offering, *cigExchange.APIError) {
 
 	offering := &Offering{
 		ID: UUID,
 	}
-	err := cigExchange.GetDB().First(offering).Error
+	db := cigExchange.GetDB().First(offering)
+	if db.Error != nil {
+		if db.RecordNotFound() {
+			return nil, cigExchange.NewInvalidFieldError("offering_id", "Offering with provided id doesn't exist")
+		}
+		return nil, cigExchange.NewDatabaseError("Fetch offering failed", db.Error)
+	}
 
-	return offering, err
+	return offering, nil
 }
 
 // GetOfferings queries all offering objects from db
