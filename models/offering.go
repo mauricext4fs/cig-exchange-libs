@@ -1,13 +1,13 @@
 package models
 
 import (
-	"cig-exchange-libs"
+	cigExchange "cig-exchange-libs"
 	"fmt"
 	"time"
 
 	"github.com/jinzhu/gorm"
 	"github.com/lib/pq"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 // Offering is a struct to represent an offering
@@ -74,8 +74,6 @@ func (offering *Offering) Create() error {
 
 	// invalidate the uuid
 	offering.ID = ""
-	offering.CreatedAt = time.Time{}
-	offering.UpdatedAt = time.Time{}
 
 	if err := offering.Validate(); err != nil {
 		return err
@@ -92,9 +90,6 @@ func (offering *Offering) Update() error {
 		return fmt.Errorf("Offering UUID is not set")
 	}
 
-	offering.CreatedAt = time.Time{}
-	offering.UpdatedAt = time.Time{}
-
 	if err := offering.Validate(); err != nil {
 		return err
 	}
@@ -103,14 +98,21 @@ func (offering *Offering) Update() error {
 }
 
 // Delete existing offering object in db
-func (offering *Offering) Delete() error {
+func (offering *Offering) Delete() *cigExchange.APIError {
 
 	// check that UUID is set
 	if len(offering.ID) == 0 {
-		return fmt.Errorf("Offering UUID is not set")
+		return cigExchange.NewInvalidFieldError("offering_id", "Offering id is invalid")
 	}
 
-	return cigExchange.GetDB().Delete(offering).Error
+	db := cigExchange.GetDB().Delete(offering)
+	if db.Error != nil {
+		return cigExchange.NewDatabaseError("Failed to delete offering", db.Error)
+	}
+	if db.RowsAffected == 0 {
+		return cigExchange.NewInvalidFieldError("offering_id", "Offering with provided id doesn't exist")
+	}
+	return nil
 }
 
 // GetOffering queries a single offering from db

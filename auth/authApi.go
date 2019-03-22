@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"cig-exchange-libs"
+	cigExchange "cig-exchange-libs"
 	"cig-exchange-libs/models"
 	"context"
 	"encoding/json"
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/gorilla/mux"
 	"github.com/mattbaird/gochimp"
 	uuid "github.com/satori/go.uuid"
 )
@@ -45,7 +46,11 @@ type verificationCodeRequest struct {
 	Code string `json:"code"`
 }
 
-// UserRequest is a structure to represent the signup api request
+type jwtResponse struct {
+	JWT string `json:"jwt"`
+}
+
+// userRequest is a structure to represent the signup api request
 type userRequest struct {
 	Sex              string `json:"sex"`
 	Name             string `json:"name"`
@@ -69,6 +74,35 @@ func (user *userRequest) convertRequestToUser() *models.User {
 	mUser.LoginPhone = &models.Contact{Type: "phone", Level: "secondary", Value1: user.PhoneCountryCode, Value2: user.PhoneNumber}
 
 	return mUser
+}
+
+type organisationRequest struct {
+	Sex              string `json:"sex"`
+	Name             string `json:"name"`
+	LastName         string `json:"lastname"`
+	Email            string `json:"email"`
+	PhoneCountryCode string `json:"phone_country_code"`
+	PhoneNumber      string `json:"phone_number"`
+	ReferenceKey     string `json:"reference_key"`
+	OrganisationName string `json:"organisation_name"`
+}
+
+func (request *organisationRequest) convertRequestToUserAndOrganisation() (*models.User, *models.Organisation) {
+	mUser := &models.User{}
+
+	mUser.Sex = request.Sex
+	mUser.Role = "Platform"
+	mUser.Name = request.Name
+	mUser.LastName = request.LastName
+
+	mUser.LoginEmail = &models.Contact{Type: "email", Level: "primary", Value1: request.Email}
+	mUser.LoginPhone = &models.Contact{Type: "phone", Level: "secondary", Value1: request.PhoneCountryCode, Value2: request.PhoneNumber}
+
+	mOrganisation := &models.Organisation{}
+	mOrganisation.ReferenceKey = request.ReferenceKey
+	mOrganisation.Name = request.OrganisationName
+
+	return mUser, mOrganisation
 }
 
 // UserAPI handles JWT auth and user management api calls
@@ -262,6 +296,104 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 	cigExchange.Respond(w, resp)
 }
 
+// CreateOrganisationHandler handles POST api/organisations/signup endpoint
+func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http.Request) {
+
+	orgRequest := &organisationRequest{}
+	// decode organisation request object from request body
+	err := json.NewDecoder(r.Body).Decode(orgRequest)
+	if err != nil {
+		apiError := cigExchange.NewJSONDecodingError(err)
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
+	// convert request to User and Organisation structs
+	user, organisation := orgRequest.convertRequestToUserAndOrganisation()
+
+	// prepare silence error response
+	resp := &userResponse{}
+	resp.randomUUID()
+
+	if len(organisation.ReferenceKey) == 0 {
+		apiError := cigExchange.NewInvalidFieldError("reference_key", "Organisation reference key is invalid")
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
+	// check that organisation doesn't exist
+	orgWhere := &models.Organisation{
+		ReferenceKey: organisation.ReferenceKey,
+	}
+	org := &models.Organisation{}
+	db := cigExchange.GetDB().Where(orgWhere).First(org)
+	if db.Error != nil {
+		// handle database error
+		if !db.RecordNotFound() {
+			apiError := cigExchange.NewDatabaseError("Organization lookup failed", db.Error)
+			fmt.Println(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
+			return
+		}
+		// organisation doen't exist
+	} else {
+		// handle wrong reference key
+		apiError := cigExchange.NewInvalidFieldError("reference_key", "Organisation with reference key already exist")
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
+	// try to create user without reference key
+	apiError := user.Create("")
+	if apiError != nil {
+		fmt.Println(apiError.ToString())
+		if apiError.ShouldSilenceError() {
+			cigExchange.Respond(w, resp)
+		} else {
+			cigExchange.RespondWithAPIError(w, apiError)
+		}
+		return
+	}
+
+	// insert organisation into db
+	apiError = organisation.Create()
+	if apiError != nil {
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
+	orgUser := &models.OrganisationUser{
+		UserID:           user.ID,
+		OrganisationID:   organisation.ID,
+		OrganisationRole: "admin",
+		IsHome:           true,
+	}
+
+	// insert organisation user into db
+	apiError = orgUser.Create()
+	if apiError != nil {
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
+	// send welcome email async
+	go func() {
+		err = sendEmail(emailTypeWelcome, orgRequest.Email, "")
+		if err != nil {
+			fmt.Println("CreateOrganisation: email sending error:")
+			fmt.Println(err.Error())
+		}
+	}()
+
+	resp.UUID = user.ID
+	cigExchange.Respond(w, resp)
+}
+
 // GetUserHandler handles POST api/users/signin endpoint
 func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -427,14 +559,37 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// get organisation UUID related to user
+	// get OrganisationUsers related to user
 	organisationUser := &models.OrganisationUser{}
-	db := cigExchange.GetDB().Model(user).Related(organisationUser, "UserID")
+	orgUsers := make([]*models.OrganisationUser, 0)
+	db := cigExchange.GetDB().Model(user).Related(&orgUsers, "UserID")
 	if db.Error != nil {
 		// organization can be missed
 		if !db.RecordNotFound() {
 			apiError = cigExchange.NewDatabaseError("Organization user links lookup failed", db.Error)
 			fmt.Printf(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
+			return
+		}
+	}
+
+	// choose home organisation
+	if len(orgUsers) > 0 {
+		// set default home organisation
+		organisationUser = orgUsers[0]
+
+		// look for home organisation
+		for _, orgUser := range orgUsers {
+			if orgUser.IsHome {
+				organisationUser = orgUser
+				break
+			}
+		}
+
+		// apply home organisation
+		apiError = models.SetHomeOrganisation(organisationUser)
+		if apiError != nil {
+			fmt.Println(apiError.ToString())
 			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
@@ -520,11 +675,72 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	type verifyCodeResponse struct {
-		JWT string `json:"jwt"`
+	resp := &jwtResponse{JWT: tokenString}
+	cigExchange.Respond(w, resp)
+}
+
+// ChangeOrganisationHandler handles POST api/users/switch/{organisation_id} endpoint
+func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http.Request) {
+
+	organisationID := mux.Vars(r)["organisation_id"]
+
+	// load context user info
+	loggedInUser, err := GetContextValues(r)
+	if err != nil {
+		apiError := cigExchange.NewRoutingError(err)
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
 	}
 
-	resp := &verifyCodeResponse{JWT: tokenString}
+	// find organisation user
+	searchOrgUser := &models.OrganisationUser{
+		OrganisationID: organisationID,
+		UserID:         loggedInUser.UserUUID,
+	}
+
+	orgUser, apiError := searchOrgUser.Find()
+	if apiError != nil {
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
+	// check that user belong to organisation
+	if orgUser.UserID != loggedInUser.UserUUID {
+		apiError = cigExchange.NewInvalidFieldError("organisation_id", "User don't belong to organisation")
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
+	// select new home organisation
+	apiError = models.SetHomeOrganisation(orgUser)
+	if apiError != nil {
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
+	// verification passed, generate jwt and return it
+	tk := &token{
+		loggedInUser.UserUUID,
+		organisationID,
+		jwt.StandardClaims{
+			IssuedAt:  time.Now().Unix(),
+			ExpiresAt: time.Now().Add(time.Minute * tokenExpirationTimeInMin).Unix(),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tk)
+	tokenString, err := token.SignedString([]byte(os.Getenv("TOKEN_PASSWORD")))
+	if err != nil {
+		apiError := cigExchange.NewTokenError("Token generation failed", err)
+		fmt.Println(apiError.ToString())
+		cigExchange.RespondWithAPIError(w, apiError)
+		return
+	}
+
+	resp := &jwtResponse{JWT: tokenString}
 	cigExchange.Respond(w, resp)
 }
 
