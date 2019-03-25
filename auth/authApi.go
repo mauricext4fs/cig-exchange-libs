@@ -649,7 +649,7 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	// user is verified
-	user.Verified = 1
+	user.Status = models.UserStatusVerified
 	apiError = user.Save()
 	if err != nil {
 		fmt.Printf(apiError.ToString())
