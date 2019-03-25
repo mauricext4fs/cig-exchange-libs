@@ -9,6 +9,12 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
+// Constants defining the user status
+const (
+	UserStatusUnverified = "unverified"
+	UserStatusVerified   = "active"
+)
+
 // User is a struct to represent a user
 type User struct {
 	ID             string     `json:"id" gorm:"column:id;primary_key"`
@@ -21,6 +27,7 @@ type User struct {
 	LoginPhone     *Contact   `json:"-" gorm:"foreignkey:LoginPhoneUUID;association_foreignkey:ID"`
 	LoginPhoneUUID *string    `json:"-" gorm:"column:login_phone"`
 	Verified       int64      `json:"-" gorm:"column:verified"`
+	Status         string     `json:"-" gorm:"column:status;default:'unverified'"`
 	CreatedAt      time.Time  `json:"-" gorm:"column:created_at"`
 	UpdatedAt      time.Time  `json:"-" gorm:"column:updated_at"`
 	DeletedAt      *time.Time `json:"-" gorm:"column:deleted_at"`
@@ -66,7 +73,7 @@ func (user *User) Create(referenceKey string) *cigExchange.APIError {
 	} else {
 		existingUser := &User{}
 		if cigExchange.GetDB().Model(temp).Related(existingUser, "LoginEmail").Error == nil {
-			if existingUser.Verified > 0 {
+			if existingUser.Status == UserStatusVerified {
 				apiErr = &cigExchange.APIError{}
 				apiErr.SetErrorType(cigExchange.ErrorTypeUnauthorized)
 				apiErr.NewNestedError(cigExchange.ReasonUserAlreadyExists, "User already exists and is verified")
