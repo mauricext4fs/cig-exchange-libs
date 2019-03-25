@@ -27,7 +27,7 @@ type User struct {
 	LoginPhone     *Contact   `json:"-" gorm:"foreignkey:LoginPhoneUUID;association_foreignkey:ID"`
 	LoginPhoneUUID *string    `json:"-" gorm:"column:login_phone"`
 	Verified       int64      `json:"-" gorm:"column:verified"`
-	Status         string     `json:"-" gorm:"column:status"`
+	Status         string     `json:"-" gorm:"column:status;default:'unverified'"`
 	CreatedAt      time.Time  `json:"-" gorm:"column:created_at"`
 	UpdatedAt      time.Time  `json:"-" gorm:"column:updated_at"`
 	DeletedAt      *time.Time `json:"-" gorm:"column:deleted_at"`
