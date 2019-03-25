@@ -12,7 +12,7 @@ import (
 // Constants defining the user status
 const (
 	UserStatusUnverified = "unverified"
-	UserStatusVerified   = "verified"
+	UserStatusVerified   = "active"
 )
 
 // User is a struct to represent a user
