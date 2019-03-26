@@ -19,7 +19,7 @@ type Offering struct {
 	Amount         float64        `json:"amount" gorm:"column:amount"`
 	Remaining      float64        `json:"remaining" gorm:"column:remaining"`
 	Interest       float64        `json:"interest" gorm:"column:interest"`
-	Period         int64          `json:"period" gorm:"column:period"`
+	Period         *int64         `json:"period" gorm:"column:period"`
 	Origin         string         `json:"origin" gorm:"column:origin"`
 	IsVisible      bool           `json:"is_visible" gorm:"is_visible"`
 	Organisation   Organisation   `json:"-" gorm:"foreignkey:OrganisationID;association_foreignkey:ID"`
