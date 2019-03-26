@@ -107,7 +107,7 @@ func (request *organisationRequest) convertRequestToUserAndOrganisation() (*mode
 
 // UserAPI handles JWT auth and user management api calls
 type UserAPI struct {
-	SkipJWT []string
+	SkipPrefix string
 }
 
 // LoggedInUser is passed to controllers after jwt auth
@@ -167,12 +167,9 @@ func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler
 		requestPath := r.URL.Path
 
 		// check if request does not need authentication, serve the request if it doesn't need it
-		for _, path := range userAPI.SkipJWT {
-
-			if requestPath == path {
-				next.ServeHTTP(w, r)
-				return
-			}
+		if strings.HasPrefix(requestPath, userAPI.SkipPrefix) {
+			next.ServeHTTP(w, r)
+			return
 		}
 
 		response := make(map[string]interface{})
