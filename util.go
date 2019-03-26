@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
+
+	"github.com/mattbaird/gochimp"
 )
 
 const letterBytes = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -62,4 +65,72 @@ func RespondWithAPIError(w http.ResponseWriter, apiErr *APIError) {
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(apiErr.Code)
 	json.NewEncoder(w).Encode(apiErr)
+}
+
+type emailType int
+
+// Constants defining email type
+const (
+	EmailTypeWelcome emailType = iota
+	EmailTypePinCode
+)
+
+// SendEmail sends template emails
+func SendEmail(eType emailType, email, pinCode string) error {
+
+	mandrillClient := GetMandrill()
+
+	subject := ""
+	templateName := ""
+	mergeVars := make([]gochimp.Var, 0)
+
+	switch eType {
+	case EmailTypeWelcome:
+		templateName = "welcome"
+		subject = "Welcome aboard!"
+	case EmailTypePinCode:
+		templateName = "pin-code"
+		subject = "CIG Exchange Verification Code"
+		mVar := gochimp.Var{
+			Name:    "pincode",
+			Content: pinCode,
+		}
+		mergeVars = append(mergeVars, mVar)
+	default:
+		return fmt.Errorf("Unsupported email type: %v", eType)
+	}
+
+	// TemplateRender sometimes returns zero length string without giving any error (wtf???)
+	// retry is a workaround that helps to render it properly
+	renderedTemplate := ""
+	attempts := 0
+	for {
+		if len(renderedTemplate) > 0 {
+			break
+		}
+		if attempts > 5 {
+			return fmt.Errorf("Mandrill failure: unable to render template in %v attempts", attempts)
+		}
+		var err error
+		renderedTemplate, err = mandrillClient.TemplateRender(templateName, []gochimp.Var{}, mergeVars)
+		if err != nil {
+			return err
+		}
+		attempts++
+	}
+
+	recipients := []gochimp.Recipient{
+		gochimp.Recipient{Email: email},
+	}
+
+	message := gochimp.Message{
+		Html:      renderedTemplate,
+		Subject:   subject,
+		FromEmail: os.Getenv("FROM_EMAIL"),
+		FromName:  "CIG Exchange",
+		To:        recipients,
+	}
+
+	_, err := mandrillClient.MessageSend(message, false)
+	return err
 }
