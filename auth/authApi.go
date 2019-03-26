@@ -13,7 +13,6 @@ import (
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
-	"github.com/mattbaird/gochimp"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -50,8 +49,8 @@ type jwtResponse struct {
 	JWT string `json:"jwt"`
 }
 
-// userRequest is a structure to represent the signup api request
-type userRequest struct {
+// UserRequest is a structure to represent the signup api request
+type UserRequest struct {
 	Sex              string `json:"sex"`
 	Name             string `json:"name"`
 	LastName         string `json:"lastname"`
@@ -62,7 +61,8 @@ type userRequest struct {
 	Platform         string `json:"platform"`
 }
 
-func (user *userRequest) convertRequestToUser() *models.User {
+// ConvertRequestToUser convert UserRequest struct to User
+func (user *UserRequest) ConvertRequestToUser() *models.User {
 	mUser := &models.User{}
 
 	mUser.Sex = user.Sex
@@ -234,7 +234,7 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 	resp := &userResponse{}
 	resp.randomUUID()
 
-	userReq := &userRequest{}
+	userReq := &UserRequest{}
 
 	// decode user object from request body
 	err := json.NewDecoder(r.Body).Decode(userReq)
@@ -261,7 +261,7 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	user := userReq.convertRequestToUser()
+	user := userReq.ConvertRequestToUser()
 
 	// P2P users are required to have an organisation reference key
 	if userReq.Platform == PlatformP2P && len(userReq.ReferenceKey) == 0 {
@@ -285,7 +285,7 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 
 	// send welcome email async
 	go func() {
-		err = sendEmail(emailTypeWelcome, userReq.Email, "")
+		err = cigExchange.SendEmail(cigExchange.EmailTypeWelcome, userReq.Email, "")
 		if err != nil {
 			fmt.Println("CreateUser: email sending error:")
 			fmt.Println(err.Error())
@@ -383,7 +383,7 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 
 	// send welcome email async
 	go func() {
-		err = sendEmail(emailTypeWelcome, orgRequest.Email, "")
+		err = cigExchange.SendEmail(cigExchange.EmailTypeWelcome, orgRequest.Email, "")
 		if err != nil {
 			fmt.Println("CreateOrganisation: email sending error:")
 			fmt.Println(err.Error())
@@ -400,7 +400,7 @@ func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	resp := &userResponse{}
 	resp.randomUUID()
 
-	userReq := &userRequest{}
+	userReq := &UserRequest{}
 	// decode user object from request body
 	err := json.NewDecoder(r.Body).Decode(userReq)
 	if err != nil {
@@ -506,7 +506,7 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 		}
 		// process the send OTP async so that client won't see any delays
 		go func() {
-			err = sendEmail(emailTypePinCode, user.LoginEmail.Value1, code)
+			err = cigExchange.SendEmail(cigExchange.EmailTypePinCode, user.LoginEmail.Value1, code)
 			if err != nil {
 				fmt.Println("SendCode: email sending error:")
 				fmt.Println(err.Error())
@@ -580,6 +580,11 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 
 		// look for home organisation
 		for _, orgUser := range orgUsers {
+			if orgUser.Status != models.OrganisationUserStatusActive {
+				orgUser.Status = models.OrganisationUserStatusActive
+				orgUser.Update()
+			}
+
 			if orgUser.IsHome {
 				organisationUser = orgUser
 				break
@@ -742,70 +747,4 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 
 	resp := &jwtResponse{JWT: tokenString}
 	cigExchange.Respond(w, resp)
-}
-
-type emailType int
-
-const (
-	emailTypeWelcome emailType = iota
-	emailTypePinCode
-)
-
-func sendEmail(eType emailType, email, pinCode string) error {
-
-	mandrillClient := cigExchange.GetMandrill()
-
-	subject := ""
-	templateName := ""
-	mergeVars := make([]gochimp.Var, 0)
-
-	switch eType {
-	case emailTypeWelcome:
-		templateName = "welcome"
-		subject = "Welcome aboard!"
-	case emailTypePinCode:
-		templateName = "pin-code"
-		subject = "CIG Exchange Verification Code"
-		mVar := gochimp.Var{
-			Name:    "pincode",
-			Content: pinCode,
-		}
-		mergeVars = append(mergeVars, mVar)
-	default:
-		return fmt.Errorf("Unsupported email type: %v", eType)
-	}
-
-	// TemplateRender sometimes returns zero length string without giving any error (wtf???)
-	// retry is a workaround that helps to render it properly
-	renderedTemplate := ""
-	attempts := 0
-	for {
-		if len(renderedTemplate) > 0 {
-			break
-		}
-		if attempts > 5 {
-			return fmt.Errorf("Mandrill failure: unable to render template in %v attempts", attempts)
-		}
-		var err error
-		renderedTemplate, err = mandrillClient.TemplateRender(templateName, []gochimp.Var{}, mergeVars)
-		if err != nil {
-			return err
-		}
-		attempts++
-	}
-
-	recipients := []gochimp.Recipient{
-		gochimp.Recipient{Email: email},
-	}
-
-	message := gochimp.Message{
-		Html:      renderedTemplate,
-		Subject:   subject,
-		FromEmail: os.Getenv("FROM_EMAIL"),
-		FromName:  "CIG Exchange",
-		To:        recipients,
-	}
-
-	_, err := mandrillClient.MessageSend(message, false)
-	return err
 }

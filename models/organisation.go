@@ -2,7 +2,6 @@ package models
 
 import (
 	cigExchange "cig-exchange-libs"
-	"fmt"
 	"strings"
 	"time"
 
@@ -66,7 +65,7 @@ func (organisation *Organisation) Update() *cigExchange.APIError {
 		return cigExchange.NewInvalidFieldError("organisation_id", "Invalid organisation id")
 	}
 
-	err := cigExchange.GetDB().Model(organisation).Updates(organisation).Error
+	err := cigExchange.GetDB().Save(organisation).Error
 	if err != nil {
 		return cigExchange.NewDatabaseError("Failed to update organisation ", err)
 	}
@@ -135,6 +134,13 @@ func (organisation *Organisation) trimFieldsAndValidate() *cigExchange.APIError 
 	return nil
 }
 
+// Constants defining the organisation user status
+const (
+	OrganisationUserStatusInvited    = "invited"
+	OrganisationUserStatusUnverified = "unverified"
+	OrganisationUserStatusActive     = "active"
+)
+
 // OrganisationUser is a struct to represent an organisation to user link
 type OrganisationUser struct {
 	ID               string     `gorm:"column:id;primary_key"`
@@ -142,6 +148,7 @@ type OrganisationUser struct {
 	UserID           string     `gorm:"column:user_id"`
 	OrganisationRole string     `gorm:"column:organisation_role"`
 	IsHome           bool       `gorm:"column:is_home"`
+	Status           string     `gorm:"column:status;default:'invited'"`
 	CreatedAt        time.Time  `gorm:"column:created_at"`
 	UpdatedAt        time.Time  `gorm:"column:updated_at"`
 	DeletedAt        *time.Time `gorm:"column:deleted_at"`
@@ -200,7 +207,7 @@ func (orgUser *OrganisationUser) Update() *cigExchange.APIError {
 	}
 
 	// update OrganisationUser
-	err := cigExchange.GetDB().Model(orgUser).Updates(orgUser).Error
+	err := cigExchange.GetDB().Save(orgUser).Error
 	if err != nil {
 		return cigExchange.NewDatabaseError("Failed to update organisation user ", err)
 	}
@@ -291,7 +298,7 @@ func GetOrganisationUsersForOrganisation(organisationID string) (orgUsers []*Org
 }
 
 // GetUsersForOrganisation queries all users for organisation from db
-func GetUsersForOrganisation(organisationID string) (users []*User, apiErr *cigExchange.APIError) {
+func GetUsersForOrganisation(organisationID string, invitedUsers bool) (users []*User, apiErr *cigExchange.APIError) {
 
 	users = make([]*User, 0)
 	var orgUsers []OrganisationUser
@@ -306,16 +313,25 @@ func GetUsersForOrganisation(organisationID string) (users []*User, apiErr *cigE
 	}
 
 	for _, orgUser := range orgUsers {
+		if invitedUsers {
+			if orgUser.Status != OrganisationUserStatusInvited {
+				continue
+			}
+		} else {
+			if orgUser.Status != OrganisationUserStatusActive {
+				continue
+			}
+		}
 		var user User
 		db = cigExchange.GetDB().Where(&User{ID: orgUser.UserID}).First(&user)
 		if db.Error != nil {
 			if db.RecordNotFound() {
-				apiErr = cigExchange.NewDatabaseError("User lookup failed", fmt.Errorf("User doesn't exist for organisation_user record"))
-			} else {
-				apiErr = cigExchange.NewDatabaseError("User lookup failed", db.Error)
+				continue
 			}
+			apiErr = cigExchange.NewDatabaseError("User lookup failed", db.Error)
 			return
 		}
+
 		// add user to response
 		users = append(users, &user)
 	}
