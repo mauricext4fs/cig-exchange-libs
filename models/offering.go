@@ -86,10 +86,10 @@ func (offering *Offering) Create() *cigExchange.APIError {
 }
 
 // Update existing offering object in db
-func (offering *Offering) Update() *cigExchange.APIError {
+func (offering *Offering) Update(update map[string]interface{}) *cigExchange.APIError {
 
 	// check that UUID is set
-	if len(offering.ID) == 0 {
+	if _, ok := update["id"]; !ok || len(offering.ID) == 0 {
 		return cigExchange.NewInvalidFieldError("offering_id", "Offering UUID is not set")
 	}
 
@@ -98,7 +98,7 @@ func (offering *Offering) Update() *cigExchange.APIError {
 		return apiError
 	}
 
-	db := cigExchange.GetDB().Model(offering).Save(offering)
+	db := cigExchange.GetDB().Model(offering).Updates(update)
 	if db.Error != nil {
 		return cigExchange.NewDatabaseError("Failed to update organisation ", db.Error)
 	}

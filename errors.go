@@ -33,6 +33,7 @@ const (
 	ReasonFieldInvalid                = "Invalid field"
 	ReasonJSONFailure                 = "JSON decoding failure"
 	ReasonDatabaseFailure             = "Database error"
+	ReasonReadFailure                 = "Read request body error"
 	ReasonRedisFailure                = "Redis error"
 	ReasonTwilioFailure               = "Twilio error"
 	ReasonTokenGenerationFailure      = "JWT generation error"
@@ -135,6 +136,18 @@ func NewDatabaseError(message string, err error) *APIError {
 	apiErr.SetErrorType(ErrorTypeInternalServer)
 
 	nesetedError := apiErr.NewNestedError(ReasonDatabaseFailure, message)
+	nesetedError.OriginalError = err
+
+	return apiErr
+}
+
+// NewReadError creates APIError with ErrorTypeInternalServer
+// and nested error with ReasonReadFailure reason
+func NewReadError(message string, err error) *APIError {
+	apiErr := &APIError{}
+	apiErr.SetErrorType(ErrorTypeInternalServer)
+
+	nesetedError := apiErr.NewNestedError(ReasonReadFailure, message)
 	nesetedError.OriginalError = err
 
 	return apiErr

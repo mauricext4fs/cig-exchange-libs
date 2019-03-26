@@ -58,14 +58,14 @@ func (organisation *Organisation) Create() *cigExchange.APIError {
 }
 
 // Update existing organisation object in db
-func (organisation *Organisation) Update() *cigExchange.APIError {
+func (organisation *Organisation) Update(update map[string]interface{}) *cigExchange.APIError {
 
 	// check that UUID is set
-	if len(organisation.ID) == 0 {
+	if _, ok := update["id"]; !ok || len(organisation.ID) == 0 {
 		return cigExchange.NewInvalidFieldError("organisation_id", "Invalid organisation id")
 	}
 
-	err := cigExchange.GetDB().Save(organisation).Error
+	err := cigExchange.GetDB().Model(organisation).Updates(update).Error
 	if err != nil {
 		return cigExchange.NewDatabaseError("Failed to update organisation ", err)
 	}

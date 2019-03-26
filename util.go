@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"reflect"
 
 	"github.com/mattbaird/gochimp"
 )
@@ -65,6 +66,32 @@ func RespondWithAPIError(w http.ResponseWriter, apiErr *APIError) {
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(apiErr.Code)
 	json.NewEncoder(w).Encode(apiErr)
+}
+
+// FilterUnknownFields prepares map[string]interface{} for gorm Update
+func FilterUnknownFields(model interface{}, d map[string]interface{}) map[string]interface{} {
+
+	result := make(map[string]interface{})
+
+	ignoreFields := [3]string{"created_at", "updated_at", "deleted_at"}
+
+	s := reflect.ValueOf(model).Elem()
+	typeOfP := s.Type()
+	// iterate fields
+	for i := 0; i < s.NumField(); i++ {
+		for jsonName, value := range d {
+			for _, ignoreField := range ignoreFields {
+				if jsonName == ignoreField {
+					continue
+				}
+			}
+			if typeOfP.Field(i).Tag.Get("json") == jsonName {
+				result[jsonName] = value
+			}
+		}
+	}
+
+	return result
 }
 
 type emailType int
