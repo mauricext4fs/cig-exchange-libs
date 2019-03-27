@@ -113,6 +113,42 @@ func GetOrganisation(UUID string) (*Organisation, *cigExchange.APIError) {
 	return organisation, nil
 }
 
+// GetOrganisations queries all organisations for user from db
+func GetOrganisations(userUUID string) ([]*Organisation, *cigExchange.APIError) {
+
+	// check that UUID is set
+	if len(userUUID) == 0 {
+		return nil, cigExchange.NewInvalidFieldError("user_id", "Invalid user id")
+	}
+
+	organisations := make([]*Organisation, 0)
+
+	var orgUsers []OrganisationUser
+
+	// find all organisationUser objects for user
+	db := cigExchange.GetDB().Where(&OrganisationUser{UserID: userUUID}).Find(&orgUsers)
+	if db.Error != nil {
+		if !db.RecordNotFound() {
+			return nil, cigExchange.NewDatabaseError("OrganisationUser lookup failed", db.Error)
+		}
+	}
+
+	for _, orgUser := range orgUsers {
+		organisation := &Organisation{
+			ID: orgUser.OrganisationID,
+		}
+		db := cigExchange.GetDB().First(organisation)
+		if db.Error != nil {
+			if !db.RecordNotFound() {
+				return nil, cigExchange.NewDatabaseError("Organisation lookup failed", db.Error)
+			}
+		}
+		organisations = append(organisations, organisation)
+	}
+
+	return organisations, nil
+}
+
 func (organisation *Organisation) trimFieldsAndValidate() *cigExchange.APIError {
 
 	organisation.Name = strings.TrimSpace(organisation.Name)
