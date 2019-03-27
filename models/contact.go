@@ -41,3 +41,31 @@ func (*Contact) BeforeCreate(scope *gorm.Scope) error {
 
 	return nil
 }
+
+// UserContact is a struct to represent a contact
+type UserContact struct {
+	ID        string     `gorm:"column:id;primary_key"`
+	UserID    string     `gorm:"column:user_id"`
+	ContactID string     `gorm:"column:contact_id"`
+	Index     int32      `gorm:"column:index;default:100"`
+	CreatedAt time.Time  `gorm:"column:created_at"`
+	UpdatedAt time.Time  `gorm:"column:updated_at"`
+	DeletedAt *time.Time `gorm:"column:deleted_at"`
+}
+
+// TableName returns table name for struct
+func (*UserContact) TableName() string {
+	return "user_contact"
+}
+
+// BeforeCreate generates new unique UUIDs for new db records
+func (*UserContact) BeforeCreate(scope *gorm.Scope) error {
+
+	UUID, err := uuid.NewV4()
+	if err != nil {
+		return err
+	}
+	scope.SetColumn("ID", UUID.String())
+
+	return nil
+}
