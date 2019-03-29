@@ -375,7 +375,7 @@ func GetUserByEmail(email string) (user *User, apiErr *cigExchange.APIError) {
 	db := cigExchange.GetDB().Where(contWhere).First(cont)
 	if db.Error != nil {
 		if db.RecordNotFound() {
-			apiErr = cigExchange.NewUserDoesntExistError("User with provided email doesn't exist")
+			apiErr = cigExchange.NewUserDoesntExistError("Contact with provided email doesn't exist")
 		} else {
 			apiErr = cigExchange.NewDatabaseError("Contact lookup failed", db.Error)
 		}

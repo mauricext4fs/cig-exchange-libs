@@ -157,19 +157,28 @@ func GetOffering(UUID string) (*Offering, *cigExchange.APIError) {
 }
 
 // GetOfferings queries all offering objects from db
-func GetOfferings() ([]*Offering, error) {
+func GetOfferings() ([]*Offering, *cigExchange.APIError) {
 
-	offering := make([]*Offering, 0)
-	err := cigExchange.GetDB().Preload("Organisation").Find(&offering).Error
+	offerings := make([]*Offering, 0)
+	db := cigExchange.GetDB().Preload("Organisation").Find(&offerings)
+	if db.Error != nil {
+		if !db.RecordNotFound() {
+			return offerings, cigExchange.NewDatabaseError("Fetch all offerings failed", db.Error)
+		}
+	}
 
-	return offering, err
+	return offerings, nil
 }
 
 // GetOrganisationOfferings queries all offering objects from db for a given organisation
-func GetOrganisationOfferings(organisationID string) ([]*Offering, error) {
+func GetOrganisationOfferings(organisationID string) ([]*Offering, *cigExchange.APIError) {
 
-	offering := make([]*Offering, 0)
-	err := cigExchange.GetDB().Preload("Organisation").Where(&Offering{OrganisationID: organisationID}).Find(&offering).Error
-
-	return offering, err
+	offerings := make([]*Offering, 0)
+	db := cigExchange.GetDB().Preload("Organisation").Where(&Offering{OrganisationID: organisationID}).Find(&offerings)
+	if db.Error != nil {
+		if !db.RecordNotFound() {
+			return offerings, cigExchange.NewDatabaseError("Fetch offerings failed", db.Error)
+		}
+	}
+	return offerings, nil
 }
