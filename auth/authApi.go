@@ -13,6 +13,7 @@ import (
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
+	"github.com/jinzhu/gorm/dialects/postgres"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -112,10 +113,10 @@ type UserAPI struct {
 
 // LoggedInUser is passed to controllers after jwt auth
 type LoggedInUser struct {
-	UserUUID         string
-	OrganisationUUID string
-	CreationDate     time.Time
-	ExpirationDate   time.Time
+	UserUUID         string    `json:"user_id"`
+	OrganisationUUID string    `json:"organisation_id"`
+	CreationDate     time.Time `json:"creation_date"`
+	ExpirationDate   time.Time `json:"expiration_date"`
 }
 
 type token struct {
@@ -228,6 +229,11 @@ func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler
 // CreateUserHandler handles POST api/users/signup endpoint
 func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 
+	// create user activity record and print error with defer
+	apiErrorP, loggedInUserP := PrepareActivityVariables()
+	defer CreateUserActivity(loggedInUserP, apiErrorP, models.ActivityTypeSignUp)
+	defer cigExchange.PrintAPIError(apiErrorP)
+
 	resp := &userResponse{}
 	resp.randomUUID()
 
@@ -236,25 +242,22 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 	// decode user object from request body
 	err := json.NewDecoder(r.Body).Decode(userReq)
 	if err != nil {
-		apiError := cigExchange.NewJSONDecodingError(err)
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewJSONDecodingError(err)
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
 	// check that we received 'platform' parameter
 	if len(userReq.Platform) == 0 {
-		apiError := cigExchange.NewRequiredFieldError([]string{"platform"})
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewRequiredFieldError([]string{"platform"})
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
 	// user must use p2p or trading platform
 	if userReq.Platform != PlatformP2P && userReq.Platform != PlatformTrading {
-		apiError := cigExchange.NewInvalidFieldError("platform", "Invalid platform parameter")
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewInvalidFieldError("platform", "Invalid platform parameter")
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
@@ -262,20 +265,19 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 
 	// P2P users are required to have an organisation reference key
 	if userReq.Platform == PlatformP2P && len(userReq.ReferenceKey) == 0 {
-		apiError := cigExchange.NewRequiredFieldError([]string{"reference_key"})
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewRequiredFieldError([]string{"reference_key"})
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
 	// try to create user
 	apiError := user.Create(userReq.ReferenceKey)
 	if apiError != nil {
-		fmt.Println(apiError.ToString())
-		if apiError.ShouldSilenceError() {
+		*apiErrorP = apiError
+		if (*apiErrorP).ShouldSilenceError() {
 			cigExchange.Respond(w, resp)
 		} else {
-			cigExchange.RespondWithAPIError(w, apiError)
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
 		}
 		return
 	}
@@ -296,13 +298,17 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 // CreateOrganisationHandler handles POST api/organisations/signup endpoint
 func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http.Request) {
 
+	// create user activity record and print error with defer
+	apiErrorP, loggedInUserP := PrepareActivityVariables()
+	defer CreateUserActivity(loggedInUserP, apiErrorP, models.ActivityTypeOrganisationSignUp)
+	defer cigExchange.PrintAPIError(apiErrorP)
+
 	orgRequest := &organisationRequest{}
 	// decode organisation request object from request body
 	err := json.NewDecoder(r.Body).Decode(orgRequest)
 	if err != nil {
-		apiError := cigExchange.NewJSONDecodingError(err)
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewJSONDecodingError(err)
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
@@ -314,9 +320,8 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 	resp.randomUUID()
 
 	if len(organisation.ReferenceKey) == 0 {
-		apiError := cigExchange.NewInvalidFieldError("reference_key", "Organisation reference key is invalid")
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewInvalidFieldError("reference_key", "Organisation reference key is invalid")
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
@@ -329,28 +334,26 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 	if db.Error != nil {
 		// handle database error
 		if !db.RecordNotFound() {
-			apiError := cigExchange.NewDatabaseError("Organization lookup failed", db.Error)
-			fmt.Println(apiError.ToString())
-			cigExchange.RespondWithAPIError(w, apiError)
+			*apiErrorP = cigExchange.NewDatabaseError("Organization lookup failed", db.Error)
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
 			return
 		}
 		// organisation doen't exist
 	} else {
 		// handle wrong reference key
-		apiError := cigExchange.NewInvalidFieldError("reference_key", "Organisation with reference key already exist")
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewInvalidFieldError("reference_key", "Organisation with reference key already exist")
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
 	// try to create user without reference key
 	apiError := user.Create("")
 	if apiError != nil {
-		fmt.Println(apiError.ToString())
+		*apiErrorP = apiError
 		if apiError.ShouldSilenceError() {
 			cigExchange.Respond(w, resp)
 		} else {
-			cigExchange.RespondWithAPIError(w, apiError)
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
 		}
 		return
 	}
@@ -358,8 +361,8 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 	// insert organisation into db
 	apiError = organisation.Create()
 	if apiError != nil {
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = apiError
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
@@ -368,13 +371,14 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 		OrganisationID:   organisation.ID,
 		OrganisationRole: "admin",
 		IsHome:           true,
+		Status:           models.OrganisationUserStatusActive,
 	}
 
 	// insert organisation user into db
 	apiError = orgUser.Create()
 	if apiError != nil {
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = apiError
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
@@ -394,6 +398,11 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 // GetUserHandler handles POST api/users/signin endpoint
 func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 
+	// create user activity record and print error with defer
+	apiErrorP, loggedInUserP := PrepareActivityVariables()
+	defer CreateUserActivity(loggedInUserP, apiErrorP, models.ActivityTypeOrganisationSignUp)
+	defer cigExchange.PrintAPIError(apiErrorP)
+
 	resp := &userResponse{}
 	resp.randomUUID()
 
@@ -401,30 +410,27 @@ func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	// decode user object from request body
 	err := json.NewDecoder(r.Body).Decode(userReq)
 	if err != nil {
-		apiError := cigExchange.NewJSONDecodingError(err)
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewJSONDecodingError(err)
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
 	user := &models.User{}
-	var apiError *cigExchange.APIError
 	// login using email or phone number
 	if len(userReq.Email) > 0 {
-		user, apiError = models.GetUserByEmail(userReq.Email)
+		user, *apiErrorP = models.GetUserByEmail(userReq.Email)
 	} else if len(userReq.PhoneCountryCode) > 0 && len(userReq.PhoneNumber) > 0 {
-		user, apiError = models.GetUserByMobile(userReq.PhoneCountryCode, userReq.PhoneNumber)
+		user, *apiErrorP = models.GetUserByMobile(userReq.PhoneCountryCode, userReq.PhoneNumber)
 	} else {
 		// neither email or phone specified
-		apiError = cigExchange.NewRequiredFieldError([]string{"email", "phone_number", "phone_country_code"})
+		*apiErrorP = cigExchange.NewRequiredFieldError([]string{"email", "phone_number", "phone_country_code"})
 	}
 
-	if apiError != nil {
-		fmt.Println(apiError.ToString())
-		if apiError.ShouldSilenceError() {
+	if *apiErrorP != nil {
+		if (*apiErrorP).ShouldSilenceError() {
 			cigExchange.Respond(w, resp)
 		} else {
-			cigExchange.RespondWithAPIError(w, apiError)
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
 		}
 		return
 	}
@@ -436,42 +442,44 @@ func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 // SendCodeHandler handles POST api/users/send_otp endpoint
 func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) {
 
+	// create user activity record and print error with defer
+	apiErrorP, loggedInUserP := PrepareActivityVariables()
+	defer CreateUserActivity(loggedInUserP, apiErrorP, models.ActivityTypeSendOtp)
+	defer cigExchange.PrintAPIError(apiErrorP)
+
 	reqStruct := &verificationCodeRequest{}
 	// decode verificationCodeRequest object from request body
 	err := json.NewDecoder(r.Body).Decode(reqStruct)
 	if err != nil {
-		apiError := cigExchange.NewJSONDecodingError(err)
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewJSONDecodingError(err)
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
 	user, apiError := models.GetUser(reqStruct.UUID)
 	if apiError != nil {
-		fmt.Println(apiError.ToString())
+		*apiErrorP = apiError
 		if apiError.ShouldSilenceError() {
 			// respond with 204
 			w.WriteHeader(204)
 		} else {
-			cigExchange.RespondWithAPIError(w, apiError)
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
 		}
 		return
 	}
 
 	// check that we received 'type' parameter
 	if len(reqStruct.Type) == 0 {
-		apiError := cigExchange.NewRequiredFieldError([]string{"type"})
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewRequiredFieldError([]string{"type"})
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
 	// send code to email or phone number
 	if reqStruct.Type == "phone" {
 		if user.LoginPhone == nil {
-			apiError = cigExchange.NewInvalidFieldError("type", "User doesn't have phone contact")
-			fmt.Printf(apiError.ToString())
-			cigExchange.RespondWithAPIError(w, apiError)
+			*apiErrorP = cigExchange.NewInvalidFieldError("type", "User doesn't have phone contact")
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
 			return
 		}
 		// process the send OTP async so that client won't see any delays
@@ -485,9 +493,8 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 		}()
 	} else if reqStruct.Type == "email" {
 		if user.LoginEmail == nil {
-			apiError = cigExchange.NewInvalidFieldError("type", "User doesn't have email")
-			fmt.Printf(apiError.ToString())
-			cigExchange.RespondWithAPIError(w, apiError)
+			*apiErrorP = cigExchange.NewInvalidFieldError("type", "User doesn't have email")
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
 			return
 		}
 		rediskey := cigExchange.GenerateRedisKey(reqStruct.UUID)
@@ -496,9 +503,8 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 		code := cigExchange.RandCode(6)
 		redisCmd := cigExchange.GetRedis().Set(rediskey, code, expiration)
 		if redisCmd.Err() != nil {
-			apiError = cigExchange.NewRedisError("Set code failure", redisCmd.Err())
-			fmt.Printf(apiError.ToString())
-			cigExchange.RespondWithAPIError(w, apiError)
+			*apiErrorP = cigExchange.NewRedisError("Set code failure", redisCmd.Err())
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
 			return
 		}
 		// process the send OTP async so that client won't see any delays
@@ -519,9 +525,8 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	} else {
-		apiError = cigExchange.NewInvalidFieldError("type", "Invalid otp type")
-		fmt.Printf(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewInvalidFieldError("type", "Invalid otp type")
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 	w.WriteHeader(204)
@@ -529,6 +534,11 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 
 // VerifyCodeHandler handles POST api/users/verify_otp endpoint
 func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request) {
+
+	// create user activity record and print error with defer
+	apiErrorP, loggedInUserP := PrepareActivityVariables()
+	defer CreateUserActivity(loggedInUserP, apiErrorP, models.ActivityTypeVerifyOtp)
+	defer cigExchange.PrintAPIError(apiErrorP)
 
 	// prepare the default response to send (unauthorized / invalid code)
 	secureErrorResponse := &cigExchange.APIError{}
@@ -539,19 +549,18 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	// decode verificationCodeRequest object from request body
 	err := json.NewDecoder(r.Body).Decode(reqStruct)
 	if err != nil {
-		apiError := cigExchange.NewJSONDecodingError(err)
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewJSONDecodingError(err)
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
 	user, apiError := models.GetUser(reqStruct.UUID)
 	if err != nil {
-		fmt.Println(apiError.ToString())
+		*apiErrorP = apiError
 		if apiError.ShouldSilenceError() {
 			cigExchange.RespondWithAPIError(w, secureErrorResponse)
 		} else {
-			cigExchange.RespondWithAPIError(w, apiError)
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
 		}
 		return
 	}
@@ -563,9 +572,8 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	if db.Error != nil {
 		// organization can be missed
 		if !db.RecordNotFound() {
-			apiError = cigExchange.NewDatabaseError("Organization user links lookup failed", db.Error)
-			fmt.Printf(apiError.ToString())
-			cigExchange.RespondWithAPIError(w, apiError)
+			*apiErrorP = cigExchange.NewDatabaseError("Organization user links lookup failed", db.Error)
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
 			return
 		}
 	}
@@ -591,62 +599,57 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 		// apply home organisation
 		apiError = models.SetHomeOrganisation(organisationUser)
 		if apiError != nil {
-			fmt.Println(apiError.ToString())
-			cigExchange.RespondWithAPIError(w, apiError)
+			*apiErrorP = apiError
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
 			return
 		}
 	}
 
 	// check that we received 'type' parameter
 	if len(reqStruct.Type) == 0 {
-		apiError := cigExchange.NewRequiredFieldError([]string{"type"})
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewRequiredFieldError([]string{"type"})
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
 	// verify code
 	if reqStruct.Type == "phone" {
 		if user.LoginPhone == nil {
-			apiError = cigExchange.NewInvalidFieldError("type", "User doesn't have phone contact")
-			fmt.Printf(apiError.ToString())
-			cigExchange.RespondWithAPIError(w, apiError)
+			*apiErrorP = cigExchange.NewInvalidFieldError("type", "User doesn't have phone contact")
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
 			return
 		}
 		twilioClient := cigExchange.GetTwilio()
 		_, err := twilioClient.VerifyOTP(reqStruct.Code, user.LoginPhone.Value1, user.LoginPhone.Value2)
 		if err != nil {
-			apiError = cigExchange.NewTwilioError("Verify OTP", err)
-			fmt.Printf(apiError.ToString())
-			cigExchange.RespondWithAPIError(w, apiError)
+			*apiErrorP = cigExchange.NewTwilioError("Verify OTP", err)
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
 			return
 		}
 
 	} else if reqStruct.Type == "email" {
 		if user.LoginEmail == nil {
-			apiError = cigExchange.NewInvalidFieldError("type", "User doesn't have email contact")
-			fmt.Printf(apiError.ToString())
-			cigExchange.RespondWithAPIError(w, apiError)
+			*apiErrorP = cigExchange.NewInvalidFieldError("type", "User doesn't have email contact")
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
 			return
 		}
 		rediskey := cigExchange.GenerateRedisKey(reqStruct.UUID)
 
 		redisCmd := cigExchange.GetRedis().Get(rediskey)
 		if redisCmd.Err() != nil {
-			apiError = cigExchange.NewRedisError("Get code failure", redisCmd.Err())
-			fmt.Printf(apiError.ToString())
-			cigExchange.RespondWithAPIError(w, apiError)
+			*apiErrorP = cigExchange.NewRedisError("Get code failure", redisCmd.Err())
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
 			return
 		}
 		if redisCmd.Val() != reqStruct.Code {
+			*apiErrorP = secureErrorResponse
 			fmt.Println("VerifyCode: code mismatch, expecting " + redisCmd.Val())
 			cigExchange.RespondWithAPIError(w, secureErrorResponse)
 			return
 		}
 	} else {
-		apiError = cigExchange.NewInvalidFieldError("type", "Invalid otp type")
-		fmt.Printf(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewInvalidFieldError("type", "Invalid otp type")
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
@@ -654,8 +657,8 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	user.Status = models.UserStatusVerified
 	apiError = user.Save()
 	if err != nil {
-		fmt.Printf(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = apiError
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
@@ -671,29 +674,47 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tk)
 	tokenString, err := token.SignedString([]byte(os.Getenv("TOKEN_PASSWORD")))
 	if err != nil {
+		*apiErrorP = secureErrorResponse
 		fmt.Println("VerifyCode: jwt generation failed:")
 		fmt.Println(err.Error())
 		cigExchange.RespondWithAPIError(w, secureErrorResponse)
 		return
 	}
 
+	loggedInUser := &LoggedInUser{}
+	loggedInUser.UserUUID = tk.UserUUID
+	loggedInUser.OrganisationUUID = tk.OrganisationUUID
+	issued := time.Unix(tk.IssuedAt, 0)
+	expires := time.Unix(tk.ExpiresAt, 0)
+
+	loggedInUser.CreationDate = issued
+	loggedInUser.ExpirationDate = expires
+
+	*loggedInUserP = loggedInUser
+
 	resp := &jwtResponse{JWT: tokenString}
 	cigExchange.Respond(w, resp)
+	CreateUserActivity(loggedInUserP, apiErrorP, models.ActivityTypeSessionLength)
 }
 
 // ChangeOrganisationHandler handles POST api/users/switch/{organisation_id} endpoint
 func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http.Request) {
+
+	// create user activity record and print error with defer
+	apiErrorP, loggedInUserP := PrepareActivityVariables()
+	defer CreateUserActivity(loggedInUserP, apiErrorP, models.ActivityTypeSwitchOrganisation)
+	defer cigExchange.PrintAPIError(apiErrorP)
 
 	organisationID := mux.Vars(r)["organisation_id"]
 
 	// load context user info
 	loggedInUser, err := GetContextValues(r)
 	if err != nil {
-		apiError := cigExchange.NewRoutingError(err)
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewRoutingError(err)
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
+	*loggedInUserP = loggedInUser
 
 	// find organisation user
 	searchOrgUser := &models.OrganisationUser{
@@ -703,24 +724,23 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 
 	orgUser, apiError := searchOrgUser.Find()
 	if apiError != nil {
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = apiError
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
 	// check that user belong to organisation
 	if orgUser.UserID != loggedInUser.UserUUID {
-		apiError = cigExchange.NewInvalidFieldError("organisation_id", "User don't belong to organisation")
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewInvalidFieldError("organisation_id", "User don't belong to organisation")
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
 	// select new home organisation
 	apiError = models.SetHomeOrganisation(orgUser)
 	if apiError != nil {
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = apiError
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
@@ -736,12 +756,140 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tk)
 	tokenString, err := token.SignedString([]byte(os.Getenv("TOKEN_PASSWORD")))
 	if err != nil {
-		apiError := cigExchange.NewTokenError("Token generation failed", err)
-		fmt.Println(apiError.ToString())
-		cigExchange.RespondWithAPIError(w, apiError)
+		*apiErrorP = cigExchange.NewTokenError("Token generation failed", err)
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
 	resp := &jwtResponse{JWT: tokenString}
 	cigExchange.Respond(w, resp)
+	CreateUserActivity(loggedInUserP, apiErrorP, models.ActivityTypeSessionLength)
+}
+
+// CreateUserActivity inserts new user activity object into db
+func CreateUserActivity(loggedInUserP **LoggedInUser, apiErrorP **cigExchange.APIError, activityType string) *cigExchange.APIError {
+
+	loggedInUser := *loggedInUserP
+	apiError := *apiErrorP
+
+	activity := &models.UserActivity{}
+	activity.Type = activityType
+
+	// add jwt to user activity
+	if loggedInUser == nil {
+		activity.UserID = models.UnknownUser
+	} else {
+		activity.UserID = loggedInUser.UserUUID
+		jsonBytes, err := json.Marshal(loggedInUser)
+		if err != nil {
+			apiErr := cigExchange.NewJSONEncodingError(err)
+			fmt.Println(apiErr.ToString())
+			return apiErr
+		}
+
+		activity.JWT = postgres.Jsonb{RawMessage: jsonBytes}
+	}
+
+	// add api error to user activity
+	if apiError != nil {
+		jsonBytes, err := json.Marshal(apiError)
+		if err != nil {
+			apiErr := cigExchange.NewJSONEncodingError(err)
+			fmt.Println(apiErr.ToString())
+			return apiErr
+		}
+		jsonStr := string(jsonBytes)
+		activity.Info = &jsonStr
+	}
+
+	// check user activity type
+	if len(activity.Type) == 0 {
+		apiErr := &cigExchange.APIError{}
+		apiErr.SetErrorType(cigExchange.ErrorTypeInternalServer)
+
+		apiErr.NewNestedError(cigExchange.ReasonUserActivityFailure, "Missing activity type")
+		fmt.Println(apiErr.ToString())
+		return apiErr
+	}
+
+	// create user activity record
+	err := cigExchange.GetDB().Create(activity).Error
+	if err != nil {
+		apiErr := cigExchange.NewDatabaseError("Create user activity call failed", err)
+		fmt.Println(apiErr.ToString())
+		return apiErr
+	}
+	return nil
+}
+
+// CreateCustomUserActivity inserts custom user activity object into db
+func CreateCustomUserActivity(loggedInUserP **LoggedInUser, info map[string]interface{}) *cigExchange.APIError {
+
+	loggedInUser := *loggedInUserP
+
+	activity := &models.UserActivity{}
+
+	// check 'type' field
+	typeVal, ok := info["type"]
+	if !ok {
+		return cigExchange.NewInvalidFieldError("type", "Required field 'type' missing")
+	}
+
+	typeStr, ok := typeVal.(string)
+	if !ok {
+		return cigExchange.NewInvalidFieldError("type", "Required field 'type' is not string")
+	}
+
+	if len(typeStr) == 0 {
+		return cigExchange.NewInvalidFieldError("type", "Required field 'type' missing")
+	}
+
+	activity.Type = typeStr
+
+	if loggedInUser == nil {
+		activity.UserID = models.UnknownUser
+	} else {
+		activity.UserID = loggedInUser.UserUUID
+		jsonBytes, err := json.Marshal(loggedInUser)
+		if err != nil {
+			apiErr := cigExchange.NewJSONEncodingError(err)
+			fmt.Println(apiErr.ToString())
+			return apiErr
+		}
+
+		activity.JWT = postgres.Jsonb{RawMessage: jsonBytes}
+	}
+
+	// add info to user activity
+	jsonBytes, err := json.Marshal(info)
+	if err != nil {
+		apiErr := cigExchange.NewJSONEncodingError(err)
+		fmt.Println(apiErr.ToString())
+		return apiErr
+	}
+	jsonStr := string(jsonBytes)
+	activity.Info = &jsonStr
+
+	// create user activity record
+	err = cigExchange.GetDB().Create(activity).Error
+	if err != nil {
+		apiErr := cigExchange.NewDatabaseError("Create user activity  call failed", err)
+		fmt.Println(apiErr.ToString())
+		return apiErr
+	}
+	return nil
+}
+
+// PrepareActivityVariables creates pointers to pointers to use in defer
+func PrepareActivityVariables() (**cigExchange.APIError, **LoggedInUser) {
+
+	var apiErrorP **cigExchange.APIError
+	var innerAPIError *cigExchange.APIError
+	apiErrorP = &innerAPIError
+
+	var loggedInUserP **LoggedInUser
+	var innerLoggedInUser *LoggedInUser
+	loggedInUserP = &innerLoggedInUser
+
+	return apiErrorP, loggedInUserP
 }

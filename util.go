@@ -68,6 +68,13 @@ func RespondWithAPIError(w http.ResponseWriter, apiErr *APIError) {
 	json.NewEncoder(w).Encode(apiErr)
 }
 
+// PrintAPIError prints apiError
+func PrintAPIError(apiErrorP **APIError) {
+	if *apiErrorP != nil {
+		fmt.Println((*apiErrorP).ToString())
+	}
+}
+
 // FilterUnknownFields prepares map[string]interface{} for gorm Update
 func FilterUnknownFields(model interface{}, d map[string]interface{}) map[string]interface{} {
 

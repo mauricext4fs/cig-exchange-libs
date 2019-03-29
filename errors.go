@@ -17,9 +17,10 @@ var NotFoundHandler = func(next http.Handler) http.Handler {
 
 // top level API Error types
 const (
-	ErrorTypeBadRequest     = "Bad request"
-	ErrorTypeUnauthorized   = "Unauthorized"
-	ErrorTypeInternalServer = "Internal server error"
+	ErrorTypeBadRequest          = "Bad request"
+	ErrorTypeUnauthorized        = "Unauthorized"
+	ErrorTypeInternalServer      = "Internal server error"
+	ErrorTypeUnprocessableEntity = "Unprocessable Entity"
 )
 
 // nested API Error reasons
@@ -33,9 +34,11 @@ const (
 	ReasonFieldInvalid                = "Invalid field"
 	ReasonJSONFailure                 = "JSON decoding failure"
 	ReasonDatabaseFailure             = "Database error"
+	ReasonUserActivityFailure         = "Record user activity error"
 	ReasonReadFailure                 = "Read request body error"
 	ReasonRedisFailure                = "Redis error"
 	ReasonTwilioFailure               = "Twilio error"
+	ReasonMandrillFailure             = "Mandrill error"
 	ReasonTokenGenerationFailure      = "JWT generation error"
 	ReasonRoutingFailure              = "Routing error"
 )
@@ -80,6 +83,8 @@ func (e *APIError) SetErrorType(errType string) {
 		e.Code = 400
 	case ErrorTypeUnauthorized:
 		e.Code = 401
+	case ErrorTypeUnprocessableEntity:
+		e.Code = 422
 	case ErrorTypeInternalServer:
 		e.Code = 500
 	default:
@@ -268,6 +273,17 @@ func NewJSONDecodingError(err error) *APIError {
 	apiErr.SetErrorType(ErrorTypeBadRequest)
 
 	nesetedError := apiErr.NewNestedError(ReasonJSONFailure, "Request body decoding failed")
+	nesetedError.OriginalError = err
+	return apiErr
+}
+
+// NewJSONEncodingError creates APIError with ErrorTypeBadRequest
+// and nested error with NestedErrorJSONFailure reason
+func NewJSONEncodingError(err error) *APIError {
+	apiErr := &APIError{}
+	apiErr.SetErrorType(ErrorTypeBadRequest)
+
+	nesetedError := apiErr.NewNestedError(ReasonJSONFailure, "JWT encoding failed")
 	nesetedError.OriginalError = err
 	return apiErr
 }
