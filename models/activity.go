@@ -19,6 +19,7 @@ const (
 	ActivityTypeContactUs          = "contact_us"
 	ActivityTypeSwitchOrganisation = "switch"
 	ActivityTypeUpdateUser         = "update_user"
+	ActivityTypeGetUser            = "get_user"
 	ActivityTypeCreateOrganisation = "create_org"
 	ActivityTypeGetOrganisations   = "get_orgs"
 	ActivityTypeGetOrganisation    = "get_org"
