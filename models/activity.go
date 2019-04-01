@@ -18,6 +18,7 @@ const (
 	ActivityTypeAllOfferings       = "get_offerings"
 	ActivityTypeContactUs          = "contact_us"
 	ActivityTypeSwitchOrganisation = "switch"
+	ActivityTypeUpdateUser         = "update_user"
 	ActivityTypeCreateOrganisation = "create_org"
 	ActivityTypeGetOrganisations   = "get_orgs"
 	ActivityTypeGetOrganisation    = "get_org"

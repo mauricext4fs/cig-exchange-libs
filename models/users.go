@@ -21,7 +21,7 @@ type User struct {
 	Sex            string     `json:"sex" gorm:"column:sex"`
 	Role           string     `json:"-" gorm:"column:role"`
 	Name           string     `json:"name" gorm:"column:name"`
-	LastName       string     `json:"last_name" gorm:"column:lastname"`
+	LastName       string     `json:"lastname" gorm:"column:lastname"`
 	LoginEmail     *Contact   `json:"-" gorm:"foreignkey:LoginEmailUUID;association_foreignkey:ID"`
 	LoginEmailUUID *string    `json:"-" gorm:"column:login_email"`
 	LoginPhone     *Contact   `json:"-" gorm:"foreignkey:LoginPhoneUUID;association_foreignkey:ID"`
@@ -262,6 +262,21 @@ func CreateInvitedUser(user *User, organisation *Organisation) (*User, *cigExcha
 	}
 
 	return existingUser, nil
+}
+
+// Update existing user object in db
+func (user *User) Update(update map[string]interface{}) *cigExchange.APIError {
+
+	// check that UUID is set
+	if _, ok := update["id"]; !ok || len(user.ID) == 0 {
+		return cigExchange.NewInvalidFieldError("user_id", "User UUID is not set")
+	}
+
+	db := cigExchange.GetDB().Model(user).Updates(update)
+	if db.Error != nil {
+		return cigExchange.NewDatabaseError("Failed to update user ", db.Error)
+	}
+	return nil
 }
 
 // deleteUnverifiedUser deletes user, contacts, userContact, organisationUser
