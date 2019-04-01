@@ -329,6 +329,7 @@ func SetHomeOrganisation(homeOrgUser *OrganisationUser) *cigExchange.APIError {
 // GetOrganisationUsersForOrganisation queries all organisation users for organisation from db
 func GetOrganisationUsersForOrganisation(organisationID string) (orgUsers []*OrganisationUser, apiErr *cigExchange.APIError) {
 
+	orgUsers = make([]*OrganisationUser, 0)
 	// find all organisationUser objects for organisation
 	db := cigExchange.GetDB().Where(&OrganisationUser{OrganisationID: organisationID}).Find(&orgUsers)
 	if db.Error != nil {

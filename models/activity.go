@@ -1,6 +1,7 @@
 package models
 
 import (
+	cigExchange "cig-exchange-libs"
 	"time"
 
 	"github.com/jinzhu/gorm"
@@ -37,6 +38,7 @@ const (
 	ActivityTypeDeleteInvitation   = "delete_invitation"
 	ActivityTypeSessionLength      = "user_session"
 	ActivityTypeCreateUserActivity = "create_user_activity"
+	ActivityTypeGetUserActivities  = "get_user_activities"
 )
 
 // UnknownUser user for trading api calls
@@ -69,4 +71,18 @@ func (*UserActivity) BeforeCreate(scope *gorm.Scope) error {
 	scope.SetColumn("ID", UUID.String())
 
 	return nil
+}
+
+// GetActivitiesForUser queries all user activities for user from db
+func GetActivitiesForUser(userID string) (userActs []*UserActivity, apiErr *cigExchange.APIError) {
+
+	userActs = make([]*UserActivity, 0)
+	// find all userActivities objects for organisation
+	db := cigExchange.GetDB().Where(&UserActivity{UserID: userID}).Find(&userActs)
+	if db.Error != nil {
+		if !db.RecordNotFound() {
+			apiErr = cigExchange.NewDatabaseError("UserActivity lookup failed", db.Error)
+		}
+	}
+	return
 }
