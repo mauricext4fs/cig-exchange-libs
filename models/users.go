@@ -15,6 +15,12 @@ const (
 	UserStatusVerified   = "active"
 )
 
+// Constants defining the user role
+const (
+	UserRoleAdmin = "admin"
+	UserRoleUser  = "user"
+)
+
 // User is a struct to represent a user
 type User struct {
 	ID             string     `json:"id" gorm:"column:id;primary_key"`
@@ -130,7 +136,7 @@ func (user *User) Create(referenceKey string) *cigExchange.APIError {
 			UserID:           user.ID,
 			OrganisationID:   org.ID,
 			IsHome:           true,
-			OrganisationRole: "",
+			OrganisationRole: OrganisationRoleUser,
 			Status:           OrganisationUserStatusUnverified,
 		}
 		apiErr := orgUser.Create()
@@ -254,7 +260,7 @@ func CreateInvitedUser(user *User, organisation *Organisation) (*User, *cigExcha
 		OrganisationID:   organisation.ID,
 		Status:           OrganisationUserStatusInvited,
 		IsHome:           true,
-		OrganisationRole: "user",
+		OrganisationRole: OrganisationRoleUser,
 	}
 	apiErr = orgUser.Create()
 	if apiErr != nil {

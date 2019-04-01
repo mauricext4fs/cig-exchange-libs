@@ -67,7 +67,7 @@ func (user *UserRequest) ConvertRequestToUser() *models.User {
 	mUser := &models.User{}
 
 	mUser.Sex = user.Sex
-	mUser.Role = "Platform"
+	mUser.Role = models.UserRoleUser
 	mUser.Name = user.Name
 	mUser.LastName = user.LastName
 
@@ -92,7 +92,7 @@ func (request *organisationRequest) convertRequestToUserAndOrganisation() (*mode
 	mUser := &models.User{}
 
 	mUser.Sex = request.Sex
-	mUser.Role = "Platform"
+	mUser.Role = models.UserRoleUser
 	mUser.Name = request.Name
 	mUser.LastName = request.LastName
 
@@ -157,6 +157,49 @@ func GetContextValues(r *http.Request) (loggedInUser *LoggedInUser, err error) {
 	loggedInUser.ExpirationDate = expires
 
 	return
+}
+
+// GetUserRole returns user role
+func GetUserRole(userUUID string) (role string, apiError *cigExchange.APIError) {
+
+	// check user id
+	if len(userUUID) == 0 {
+		return "", cigExchange.NewInvalidFieldError("user_id", "UserID is invalid")
+	}
+
+	// get user
+	user, apiErr := models.GetUser(userUUID)
+	if apiErr != nil {
+		return "", apiErr
+	}
+
+	return user.Role, nil
+}
+
+// GetOrgUserRole returns user role in organisation
+func GetOrgUserRole(userUUID, organisationUUID string) (role string, apiError *cigExchange.APIError) {
+
+	// check user id
+	if len(userUUID) == 0 {
+		return "", cigExchange.NewInvalidFieldError("user_id", "UserID is invalid")
+	}
+
+	// check organisation id
+	if len(organisationUUID) == 0 {
+		return "", cigExchange.NewInvalidFieldError("organization_id", "OrganisationID is invalid")
+	}
+
+	// get role in organisation
+	orgUserWhere := &models.OrganisationUser{
+		OrganisationID: organisationUUID,
+		UserID:         userUUID,
+	}
+	orgUser, apiErr := orgUserWhere.Find()
+	if apiErr != nil {
+		return "", apiErr
+	}
+
+	return orgUser.OrganisationRole, nil
 }
 
 // JwtAuthenticationHandler handles auth for endpoints
@@ -369,7 +412,7 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 	orgUser := &models.OrganisationUser{
 		UserID:           user.ID,
 		OrganisationID:   organisation.ID,
-		OrganisationRole: "admin",
+		OrganisationRole: models.OrganisationRoleAdmin,
 		IsHome:           true,
 		Status:           models.OrganisationUserStatusActive,
 	}
