@@ -9,6 +9,12 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
+// Constants defining the user role in organisation
+const (
+	OrganisationRoleAdmin = "admin"
+	OrganisationRoleUser  = "user"
+)
+
 // Organisation is a struct to represent an organisation
 type Organisation struct {
 	ID                        string     `json:"id" gorm:"column:id;primary_key"`
