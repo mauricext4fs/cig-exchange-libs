@@ -47,7 +47,12 @@ type verificationCodeRequest struct {
 }
 
 type jwtResponse struct {
-	JWT string `json:"jwt"`
+	JWT              string `json:"jwt"`
+	UserUUID         string `json:"user_id"`
+	Role             string `json:"role"`
+	OrganisationUUID string `json:"organisation_id"`
+	OrganisationRole string `json:"organisation_role"`
+	UserEmail        string `json:"email"`
 }
 
 // UserRequest is a structure to represent the signup api request
@@ -735,7 +740,18 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 
 	*loggedInUserP = loggedInUser
 
-	resp := &jwtResponse{JWT: tokenString}
+	email := ""
+	if user.LoginEmail != nil {
+		email = user.LoginEmail.Value1
+	}
+	resp := &jwtResponse{
+		JWT:              tokenString,
+		UserUUID:         loggedInUser.UserUUID,
+		Role:             user.Role,
+		OrganisationUUID: loggedInUser.OrganisationUUID,
+		OrganisationRole: organisationUser.OrganisationRole,
+		UserEmail:        email,
+	}
 	cigExchange.Respond(w, resp)
 	CreateUserActivity(loggedInUserP, apiErrorP, models.ActivityTypeSessionLength)
 }
@@ -779,8 +795,8 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	// select new home organisation
-	apiError = models.SetHomeOrganisation(orgUser)
+	// get user
+	user, apiError := models.GetUser(loggedInUser.UserUUID)
 	if apiError != nil {
 		*apiErrorP = apiError
 		cigExchange.RespondWithAPIError(w, *apiErrorP)
@@ -804,7 +820,18 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	resp := &jwtResponse{JWT: tokenString}
+	email := ""
+	if user.LoginEmail != nil {
+		email = user.LoginEmail.Value1
+	}
+	resp := &jwtResponse{
+		JWT:              tokenString,
+		UserUUID:         loggedInUser.UserUUID,
+		Role:             user.Role,
+		OrganisationUUID: loggedInUser.OrganisationUUID,
+		OrganisationRole: orgUser.OrganisationRole,
+		UserEmail:        email,
+	}
 	cigExchange.Respond(w, resp)
 	CreateUserActivity(loggedInUserP, apiErrorP, models.ActivityTypeSessionLength)
 }
