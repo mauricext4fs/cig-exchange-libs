@@ -116,7 +116,7 @@ func (offering *Offering) Update(update map[string]interface{}) *cigExchange.API
 
 	db := cigExchange.GetDB().Model(offering).Updates(update)
 	if db.Error != nil {
-		return cigExchange.NewDatabaseError("Failed to update organisation ", db.Error)
+		return cigExchange.NewDatabaseError("Failed to update offering", db.Error)
 	}
 	return nil
 }
