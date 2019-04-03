@@ -69,7 +69,6 @@ func init() {
 	}
 
 	db = conn
-	//db.Debug().AutoMigrate(&Account{}, &Contact{})
 
 	// Redis Init
 

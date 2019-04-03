@@ -76,8 +76,8 @@ func (user *UserRequest) ConvertRequestToUser() *models.User {
 	mUser.Name = user.Name
 	mUser.LastName = user.LastName
 
-	mUser.LoginEmail = &models.Contact{Type: "email", Level: "primary", Value1: user.Email}
-	mUser.LoginPhone = &models.Contact{Type: "phone", Level: "secondary", Value1: user.PhoneCountryCode, Value2: user.PhoneNumber}
+	mUser.LoginEmail = &models.Contact{Type: models.ContactTypeEmail, Level: models.ContactLevelPrimary, Value1: user.Email}
+	mUser.LoginPhone = &models.Contact{Type: models.ContactTypePhone, Level: models.ContactLevelSecondary, Value1: user.PhoneCountryCode, Value2: user.PhoneNumber}
 
 	return mUser
 }
@@ -101,8 +101,8 @@ func (request *organisationRequest) convertRequestToUserAndOrganisation() (*mode
 	mUser.Name = request.Name
 	mUser.LastName = request.LastName
 
-	mUser.LoginEmail = &models.Contact{Type: "email", Level: "primary", Value1: request.Email}
-	mUser.LoginPhone = &models.Contact{Type: "phone", Level: "secondary", Value1: request.PhoneCountryCode, Value2: request.PhoneNumber}
+	mUser.LoginEmail = &models.Contact{Type: models.ContactTypeEmail, Level: models.ContactLevelPrimary, Value1: request.Email}
+	mUser.LoginPhone = &models.Contact{Type: models.ContactTypePhone, Level: models.ContactLevelSecondary, Value1: request.PhoneCountryCode, Value2: request.PhoneNumber}
 
 	mOrganisation := &models.Organisation{}
 	mOrganisation.ReferenceKey = request.ReferenceKey
@@ -367,18 +367,40 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 	resp := &userResponse{}
 	resp.randomUUID()
 
+	// check user
+	apiError := user.TrimFieldsAndValidate()
+	if apiError != nil {
+		*apiErrorP = apiError
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
+		return
+	}
+
+	// query user by email. Email checked in TrimFieldsAndValidate.
+	existingUser, apiError := models.GetUserByEmail(user.LoginEmail.Value1, true)
+	if apiError != nil {
+		*apiErrorP = apiError
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
+		return
+	}
+
+	// check organisation
 	if len(organisation.ReferenceKey) == 0 {
 		*apiErrorP = cigExchange.NewInvalidFieldError("reference_key", "Organisation reference key is invalid")
 		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
+	if len(organisation.Name) == 0 {
+		*apiErrorP = cigExchange.NewInvalidFieldError("organisation_name", "Organisation name key is invalid")
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
+		return
+	}
 
-	// check that organisation doesn't exist
-	orgWhere := &models.Organisation{
+	// get organisation by reference key
+	orgRefWhere := &models.Organisation{
 		ReferenceKey: organisation.ReferenceKey,
 	}
-	org := &models.Organisation{}
-	db := cigExchange.GetDB().Where(orgWhere).First(org)
+	orgRef := &models.Organisation{}
+	db := cigExchange.GetDB().Where(orgRefWhere).First(orgRef)
 	if db.Error != nil {
 		// handle database error
 		if !db.RecordNotFound() {
@@ -386,48 +408,128 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 			cigExchange.RespondWithAPIError(w, *apiErrorP)
 			return
 		}
-		// organisation doen't exist
+		// organisation with reference key doesn't exist
+		orgRef = nil
 	} else {
-		// handle wrong reference key
-		*apiErrorP = cigExchange.NewInvalidFieldError("reference_key", "Organisation with reference key already exist")
-		cigExchange.RespondWithAPIError(w, *apiErrorP)
-		return
-	}
-
-	// try to create user without reference key
-	apiError := user.Create("")
-	if apiError != nil {
-		*apiErrorP = apiError
-		if apiError.ShouldSilenceError() {
-			cigExchange.Respond(w, resp)
-		} else {
+		if orgRef.Name != organisation.Name {
+			// reference key already in use by another organisation
+			*apiErrorP = cigExchange.NewInvalidFieldError("reference_key", "Organisation reference key already in use")
 			cigExchange.RespondWithAPIError(w, *apiErrorP)
+			return
 		}
-		return
 	}
 
-	// insert organisation into db
-	apiError = organisation.Create()
-	if apiError != nil {
-		*apiErrorP = apiError
-		cigExchange.RespondWithAPIError(w, *apiErrorP)
-		return
+	// check that organisation doesn't exist
+	orgWhere := &models.Organisation{
+		Name: organisation.Name,
+	}
+	org := &models.Organisation{}
+	db = cigExchange.GetDB().Where(orgWhere).First(org)
+	if db.Error != nil {
+		// handle database error
+		if !db.RecordNotFound() {
+			*apiErrorP = cigExchange.NewDatabaseError("Organization lookup failed", db.Error)
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
+			return
+		}
+		// organisation doesn't exist
+		org = nil
+	} else {
+		if org.Verified == 1 {
+			// check user unverified and organisation is verified
+			if existingUser != nil {
+				if existingUser.Status == models.UserStatusUnverified {
+					*apiErrorP = cigExchange.NewAccessRightsError("Organisation already exists. Please use the organisation reference key for registration.")
+					cigExchange.RespondWithAPIError(w, *apiErrorP)
+					return
+				}
+			}
+			*apiErrorP = cigExchange.NewAccessRightsError("Organisation already exists. Please ask admin of the organisation to invite you")
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
+			return
+		}
+		// unverified organisation exists
+		// get organisation admin
+		orgUserWhere := &models.OrganisationUser{
+			OrganisationID:   org.ID,
+			OrganisationRole: models.OrganisationRoleAdmin,
+			Status:           models.OrganisationUserStatusActive,
+		}
+		orgUserAdmin := &models.OrganisationUser{}
+		db := cigExchange.GetDB().Where(orgUserWhere).First(orgUserAdmin)
+		if db.Error != nil {
+			if !db.RecordNotFound() {
+				*apiErrorP = cigExchange.NewDatabaseError("Organization user links lookup failed", db.Error)
+				cigExchange.RespondWithAPIError(w, *apiErrorP)
+				return
+			}
+			// organisation without verified admin
+		} else {
+			// organisation has verified admin
+			*apiErrorP = cigExchange.NewAccessRightsError("Organisation already exists. Please ask admin of the organisation to invite you")
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
+			return
+		}
 	}
 
-	orgUser := &models.OrganisationUser{
-		UserID:           user.ID,
-		OrganisationID:   organisation.ID,
-		OrganisationRole: models.OrganisationRoleAdmin,
-		IsHome:           true,
-		Status:           models.OrganisationUserStatusActive,
+	// existingUser and org can be nil at this point
+
+	// organisation doesn't exists
+	if org == nil {
+		apiError = organisation.Create()
+		if apiError != nil {
+			*apiErrorP = apiError
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
+			return
+		}
+		org = organisation
 	}
 
-	// insert organisation user into db
-	apiError = orgUser.Create()
-	if apiError != nil {
-		*apiErrorP = apiError
-		cigExchange.RespondWithAPIError(w, *apiErrorP)
-		return
+	// user doesn't exists
+	if existingUser == nil {
+		// try to create user with reference key
+		apiError = user.Create(org.ReferenceKey)
+		if apiError != nil {
+			*apiErrorP = apiError
+			if apiError.ShouldSilenceError() {
+				cigExchange.Respond(w, resp)
+			} else {
+				cigExchange.RespondWithAPIError(w, *apiErrorP)
+			}
+			return
+		}
+		existingUser = user
+	}
+
+	// query organisationUser
+	orgUserWhere := &models.OrganisationUser{
+		UserID:         existingUser.ID,
+		OrganisationID: org.ID,
+	}
+	orgUser := &models.OrganisationUser{}
+
+	db = cigExchange.GetDB().Where(orgUserWhere).First(orgUser)
+	if db.Error != nil {
+		if !db.RecordNotFound() {
+			*apiErrorP = cigExchange.NewDatabaseError("OrganizationUser lookup failed", db.Error)
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
+			return
+		}
+
+		// organisationUser doesn't exist
+		orgUser = &models.OrganisationUser{
+			UserID:           existingUser.ID,
+			OrganisationID:   organisation.ID,
+			OrganisationRole: models.OrganisationRoleUser,
+			IsHome:           false,
+			Status:           models.OrganisationUserStatusUnverified,
+		}
+		apiError = orgUser.Create()
+		if apiError != nil {
+			*apiErrorP = apiError
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
+			return
+		}
 	}
 
 	// send welcome email async
@@ -439,7 +541,7 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 		}
 	}()
 
-	resp.UUID = user.ID
+	resp.UUID = existingUser.ID
 	cigExchange.Respond(w, resp)
 }
 
@@ -466,7 +568,7 @@ func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	user := &models.User{}
 	// login using email or phone number
 	if len(userReq.Email) > 0 {
-		user, *apiErrorP = models.GetUserByEmail(userReq.Email)
+		user, *apiErrorP = models.GetUserByEmail(userReq.Email, false)
 	} else if len(userReq.PhoneCountryCode) > 0 && len(userReq.PhoneNumber) > 0 {
 		user, *apiErrorP = models.GetUserByMobile(userReq.PhoneCountryCode, userReq.PhoneNumber)
 	} else {
@@ -626,30 +728,48 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// choose home organisation
+	// select home organisation and activate organisationUsers
 	if len(orgUsers) > 0 {
-		// set default home organisation
-		organisationUser = orgUsers[0]
-
-		// look for home organisation
+		// search for home organisation
 		for _, orgUser := range orgUsers {
-			if orgUser.Status != models.OrganisationUserStatusActive {
-				orgUser.Status = models.OrganisationUserStatusActive
-				orgUser.Update()
-			}
-
 			if orgUser.IsHome {
 				organisationUser = orgUser
 				break
 			}
 		}
 
-		// apply home organisation
-		apiError = models.SetHomeOrganisation(organisationUser)
-		if apiError != nil {
-			*apiErrorP = apiError
-			cigExchange.RespondWithAPIError(w, *apiErrorP)
-			return
+		// add home organisation if user hasn't
+		if len(organisationUser.ID) == 0 {
+			organisationUser = orgUsers[0]
+			organisationUser.IsHome = true
+			organisationUser.Update()
+		}
+
+		// activate organisationUsers
+		for _, orgUser := range orgUsers {
+			role := models.OrganisationRoleUser
+			// search for organisation admin
+			orgUserWhere := &models.OrganisationUser{
+				OrganisationID:   orgUser.OrganisationID,
+				OrganisationRole: models.OrganisationRoleAdmin,
+				Status:           models.OrganisationUserStatusActive,
+			}
+			orgUserAdmin := &models.OrganisationUser{}
+			db := cigExchange.GetDB().Where(orgUserWhere).First(orgUserAdmin)
+			if db.Error != nil {
+				if !db.RecordNotFound() {
+					*apiErrorP = cigExchange.NewDatabaseError("Organization user links lookup failed", db.Error)
+					cigExchange.RespondWithAPIError(w, *apiErrorP)
+					return
+				}
+				role = models.OrganisationRoleAdmin
+			}
+
+			if orgUser.Status != models.OrganisationUserStatusActive {
+				orgUser.Status = models.OrganisationUserStatusActive
+				orgUser.OrganisationRole = role
+				orgUser.Update()
+			}
 		}
 	}
 

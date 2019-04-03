@@ -7,6 +7,18 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
+// Constants defining the contact level
+const (
+	ContactLevelPrimary   = "primary"
+	ContactLevelSecondary = "secondary"
+)
+
+// Constants defining the contact type
+const (
+	ContactTypeEmail = "email"
+	ContactTypePhone = "phone"
+)
+
 // Contact is a struct to represent a contact
 type Contact struct {
 	ID        string     `gorm:"column:id;primary_key"`
