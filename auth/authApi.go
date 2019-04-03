@@ -47,7 +47,10 @@ type verificationCodeRequest struct {
 }
 
 type jwtResponse struct {
-	JWT              string `json:"jwt"`
+	JWT string `json:"jwt"`
+}
+
+type infoResponse struct {
 	UserUUID         string `json:"user_id"`
 	Role             string `json:"role"`
 	OrganisationUUID string `json:"organisation_id"`
@@ -860,20 +863,66 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 
 	*loggedInUserP = loggedInUser
 
+	resp := &jwtResponse{
+		JWT: tokenString,
+	}
+	cigExchange.Respond(w, resp)
+	CreateUserActivity(loggedInUserP, apiErrorP, models.ActivityTypeSessionLength)
+}
+
+// GetInfo handles Get api/me/info endpoint
+func (userAPI *UserAPI) GetInfo(w http.ResponseWriter, r *http.Request) {
+
+	// create user activity record and print error with defer
+	apiErrorP, loggedInUserP := PrepareActivityVariables()
+	defer CreateUserActivity(loggedInUserP, apiErrorP, models.ActivityTypeUserInfo)
+	defer cigExchange.PrintAPIError(apiErrorP)
+
+	// load context user info
+	loggedInUser, err := GetContextValues(r)
+	if err != nil {
+		*apiErrorP = cigExchange.NewRoutingError(err)
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
+		return
+	}
+	*loggedInUserP = loggedInUser
+
+	// get user
+	user, apiError := models.GetUser(loggedInUser.UserUUID)
+	if apiError != nil {
+		*apiErrorP = apiError
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
+		return
+	}
+
+	orgUser := &models.OrganisationUser{}
+	if len(loggedInUser.OrganisationUUID) > 0 {
+		// find organisation user
+		searchOrgUser := &models.OrganisationUser{
+			OrganisationID: loggedInUser.OrganisationUUID,
+			UserID:         loggedInUser.UserUUID,
+		}
+
+		orgUser, apiError = searchOrgUser.Find()
+		if apiError != nil {
+			*apiErrorP = apiError
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
+			return
+		}
+	}
+
 	email := ""
 	if user.LoginEmail != nil {
 		email = user.LoginEmail.Value1
 	}
-	resp := &jwtResponse{
-		JWT:              tokenString,
+	resp := &infoResponse{
 		UserUUID:         loggedInUser.UserUUID,
 		Role:             user.Role,
 		OrganisationUUID: loggedInUser.OrganisationUUID,
-		OrganisationRole: organisationUser.OrganisationRole,
+		OrganisationRole: orgUser.OrganisationRole,
 		UserEmail:        email,
 	}
 	cigExchange.Respond(w, resp)
-	CreateUserActivity(loggedInUserP, apiErrorP, models.ActivityTypeSessionLength)
 }
 
 // ChangeOrganisationHandler handles POST api/users/switch/{organisation_id} endpoint
@@ -915,14 +964,6 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	// get user
-	user, apiError := models.GetUser(loggedInUser.UserUUID)
-	if apiError != nil {
-		*apiErrorP = apiError
-		cigExchange.RespondWithAPIError(w, *apiErrorP)
-		return
-	}
-
 	// verification passed, generate jwt and return it
 	tk := &token{
 		loggedInUser.UserUUID,
@@ -940,17 +981,8 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	email := ""
-	if user.LoginEmail != nil {
-		email = user.LoginEmail.Value1
-	}
 	resp := &jwtResponse{
-		JWT:              tokenString,
-		UserUUID:         loggedInUser.UserUUID,
-		Role:             user.Role,
-		OrganisationUUID: loggedInUser.OrganisationUUID,
-		OrganisationRole: orgUser.OrganisationRole,
-		UserEmail:        email,
+		JWT: tokenString,
 	}
 	cigExchange.Respond(w, resp)
 	CreateUserActivity(loggedInUserP, apiErrorP, models.ActivityTypeSessionLength)
