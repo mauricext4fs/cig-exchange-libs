@@ -62,7 +62,7 @@ func (user *User) Create(referenceKey string) *cigExchange.APIError {
 	// invalidate the uuid
 	user.ID = ""
 
-	apiErr := user.trimFieldsAndValidate()
+	apiErr := user.TrimFieldsAndValidate()
 	if apiErr != nil {
 		return apiErr
 	}
@@ -135,7 +135,7 @@ func (user *User) Create(referenceKey string) *cigExchange.APIError {
 		orgUser := &OrganisationUser{
 			UserID:           user.ID,
 			OrganisationID:   org.ID,
-			IsHome:           true,
+			IsHome:           false,
 			OrganisationRole: OrganisationRoleUser,
 			Status:           OrganisationUserStatusUnverified,
 		}
@@ -164,7 +164,7 @@ func CreateInvitedUser(user *User, organisation *Organisation) (*User, *cigExcha
 	// invalidate the uuid
 	user.ID = ""
 
-	apiErr := user.trimFieldsAndValidate()
+	apiErr := user.TrimFieldsAndValidate()
 	if apiErr != nil {
 		return nil, apiErr
 	}
@@ -259,7 +259,7 @@ func CreateInvitedUser(user *User, organisation *Organisation) (*User, *cigExcha
 		UserID:           existingUser.ID,
 		OrganisationID:   organisation.ID,
 		Status:           OrganisationUserStatusInvited,
-		IsHome:           true,
+		IsHome:           false,
 		OrganisationRole: OrganisationRoleUser,
 	}
 	apiErr = orgUser.Create()
@@ -283,6 +283,30 @@ func (user *User) Update(update map[string]interface{}) *cigExchange.APIError {
 		return cigExchange.NewDatabaseError("Failed to update user ", db.Error)
 	}
 	return nil
+}
+
+// HasUserHomeOrganisation checks for user home organisation in db
+func (user *User) HasUserHomeOrganisation() (bool, *cigExchange.APIError) {
+
+	// query organisationUser
+	orgUserWhere := &OrganisationUser{
+		UserID: user.ID,
+		IsHome: true,
+	}
+	orgUser := &OrganisationUser{}
+
+	// delete contact
+	db := cigExchange.GetDB().Where(orgUserWhere).First(&orgUser)
+	if db.Error != nil {
+		// user hasn't any home organisation
+		if db.RecordNotFound() {
+			return false, nil
+		}
+		return false, cigExchange.NewDatabaseError("Lookup home organisation call failed", db.Error)
+	}
+
+	// user has home organisation
+	return true, nil
 }
 
 // deleteUnverifiedUser deletes user, contacts, userContact, organisationUser
@@ -382,20 +406,28 @@ func GetUser(UUID string) (user *User, apiErr *cigExchange.APIError) {
 }
 
 // GetUserByEmail queries a single user from db
-func GetUserByEmail(email string) (user *User, apiErr *cigExchange.APIError) {
+// Fucntions can return (nil, nil) if ignoreRecordNotFound is true
+func GetUserByEmail(email string, ignoreRecordNotFound bool) (user *User, apiErr *cigExchange.APIError) {
 
-	cont := &Contact{}
 	contWhere := &Contact{
 		Value1: strings.TrimSpace(email),
 	}
+	// check email length
 	if len(contWhere.Value1) == 0 {
 		apiErr = cigExchange.NewRequiredFieldError([]string{"email"})
 		return
 	}
 
-	db := cigExchange.GetDB().Where(contWhere).First(cont)
+	user = nil
+
+	// query all contacts
+	conts := make([]*Contact, 0)
+	db := cigExchange.GetDB().Where(contWhere).Find(&conts)
 	if db.Error != nil {
 		if db.RecordNotFound() {
+			if ignoreRecordNotFound {
+				return nil, nil
+			}
 			apiErr = cigExchange.NewUserDoesntExistError("Contact with provided email doesn't exist")
 		} else {
 			apiErr = cigExchange.NewDatabaseError("Contact lookup failed", db.Error)
@@ -403,15 +435,21 @@ func GetUserByEmail(email string) (user *User, apiErr *cigExchange.APIError) {
 		return
 	}
 
-	user = &User{}
-	db = cigExchange.GetDB().Model(cont).Preload("LoginEmail").Preload("LoginPhone").Related(user, "LoginEmail")
-	if db.Error != nil {
-		if db.RecordNotFound() {
-			apiErr = cigExchange.NewUserDoesntExistError("User with provided email doesn't exist")
+	for _, cont := range conts {
+		u := &User{}
+		db = cigExchange.GetDB().Model(cont).Preload("LoginEmail").Preload("LoginPhone").Related(u, "LoginEmail")
+		if db.Error != nil {
+			// ignore contacts
+			if !db.RecordNotFound() {
+				apiErr = cigExchange.NewUserDoesntExistError("User with provided email doesn't exist")
+			}
 		} else {
-			apiErr = cigExchange.NewDatabaseError("User lookup failed", db.Error)
+			user = u
 		}
-		return
+	}
+
+	if user == nil && !ignoreRecordNotFound {
+		apiErr = cigExchange.NewDatabaseError("User lookup failed", db.Error)
 	}
 
 	return
@@ -462,7 +500,8 @@ func GetUserByMobile(code, number string) (user *User, apiErr *cigExchange.APIEr
 	return
 }
 
-func (user *User) trimFieldsAndValidate() *cigExchange.APIError {
+// TrimFieldsAndValidate checks user for invalid fields
+func (user *User) TrimFieldsAndValidate() *cigExchange.APIError {
 
 	user.Name = strings.TrimSpace(user.Name)
 	user.LastName = strings.TrimSpace(user.LastName)

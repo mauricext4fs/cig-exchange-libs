@@ -52,6 +52,9 @@ func (organisation *Organisation) Create() *cigExchange.APIError {
 	// invalidate the uuid
 	organisation.ID = ""
 
+	// create unverified organisation
+	organisation.Verified = 0
+
 	if apiErr := organisation.trimFieldsAndValidate(); apiErr != nil {
 		return apiErr
 	}
@@ -284,44 +287,6 @@ func (orgUser *OrganisationUser) Delete() *cigExchange.APIError {
 	}
 	if db.RowsAffected == 0 {
 		return cigExchange.NewInvalidFieldError("organisation_id, user_id", "Organisation User doesn't exist")
-	}
-	return nil
-}
-
-// SetHomeOrganisation marks only 1 OrganisationUser as home
-func SetHomeOrganisation(homeOrgUser *OrganisationUser) *cigExchange.APIError {
-
-	// found all OrganisationUser for user
-	orgUsers := make([]*OrganisationUser, 0)
-	db := cigExchange.GetDB().Where(&OrganisationUser{UserID: homeOrgUser.UserID}).Find(&orgUsers)
-	if db.Error != nil {
-		if db.RecordNotFound() {
-			return cigExchange.NewOrganisationUserDoesntExistError("Organisation User with provided parameters doesn't exist")
-		}
-		return cigExchange.NewDatabaseError("Organisation Users lookup failed", db.Error)
-	}
-
-	// modify IsHome field
-	for _, orgUser := range orgUsers {
-		if orgUser.ID == homeOrgUser.ID {
-			if !orgUser.IsHome {
-				// select IsHome in new organisation
-				orgUser.IsHome = true
-				apiError := orgUser.Update()
-				if apiError != nil {
-					return apiError
-				}
-			}
-		} else {
-			if orgUser.IsHome {
-				// deselect IsHome in organisations
-				orgUser.IsHome = false
-				apiError := orgUser.Update()
-				if apiError != nil {
-					return apiError
-				}
-			}
-		}
 	}
 	return nil
 }
