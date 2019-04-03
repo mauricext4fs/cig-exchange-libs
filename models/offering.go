@@ -36,7 +36,7 @@ type Offering struct {
 	TransactionFee         *float64       `json:"transaction_fee" gorm:"column:transaction_fee"`
 	P2PFee                 *float64       `json:"p2p_fee" gorm:"column:p2p_fee"`
 	ReferralReward         *float64       `json:"referral_reward" gorm:"column:referral_reward"`
-	ClosingDate            *float64       `json:"closing_date" gorm:"column:closing_date"`
+	ClosingDate            *string        `json:"closing_date" gorm:"column:closing_date"`
 	IsVisible              bool           `json:"is_visible" gorm:"is_visible"`
 	Organisation           Organisation   `json:"-" gorm:"foreignkey:OrganisationID;association_foreignkey:ID"`
 	OrganisationID         string         `json:"organisation_id" gorm:"column:organisation_id"`
@@ -116,7 +116,7 @@ func (offering *Offering) Update(update map[string]interface{}) *cigExchange.API
 
 	db := cigExchange.GetDB().Model(offering).Updates(update)
 	if db.Error != nil {
-		return cigExchange.NewDatabaseError("Failed to update organisation ", db.Error)
+		return cigExchange.NewDatabaseError("Failed to update offering", db.Error)
 	}
 	return nil
 }
