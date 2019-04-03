@@ -38,6 +38,7 @@ const (
 	ActivityTypeDeleteInvitation   = "delete_invitation"
 	ActivityTypeSessionLength      = "user_session"
 	ActivityTypeCreateUserActivity = "create_user_activity"
+	ActivityTypeUserInfo           = "get_user_info"
 	ActivityTypeGetUserActivities  = "get_user_activities"
 )
 
