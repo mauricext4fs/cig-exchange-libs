@@ -277,6 +277,17 @@ func NewJSONDecodingError(err error) *APIError {
 	return apiErr
 }
 
+// NewLanguagesJSONDecodingError creates APIError with ErrorTypeBadRequest
+// and nested error with NestedErrorJSONFailure reason
+func NewLanguagesJSONDecodingError(err error) *APIError {
+	apiErr := &APIError{}
+	apiErr.SetErrorType(ErrorTypeBadRequest)
+
+	nesetedError := apiErr.NewNestedError(ReasonJSONFailure, "Request body decoding failed. Expected format for 'offering_direct_url' filed:{\"en\":\"url\",\"fr\":\"url\",\"it\":\"url\",\"de\":\"url\"}.")
+	nesetedError.OriginalError = err
+	return apiErr
+}
+
 // NewJSONEncodingError creates APIError with ErrorTypeBadRequest
 // and nested error with NestedErrorJSONFailure reason
 func NewJSONEncodingError(err error) *APIError {
