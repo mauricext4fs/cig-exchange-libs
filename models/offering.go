@@ -2,6 +2,7 @@ package models
 
 import (
 	cigExchange "cig-exchange-libs"
+	"encoding/json"
 	"time"
 
 	"github.com/jinzhu/gorm"
@@ -24,7 +25,7 @@ type Offering struct {
 	Period                 *int64         `json:"period" gorm:"column:period"`
 	Origin                 string         `json:"origin" gorm:"column:origin"`
 	Map                    postgres.Jsonb `json:"map" gorm:"column:map"`
-	Location               postgres.Jsonb `json:"location" gorm:"column:location"`
+	Location               *string        `json:"location" gorm:"column:location"`
 	Tagline1               *string        `json:"tagline1" gorm:"column:tagline1"`
 	Tagline2               *string        `json:"tagline2" gorm:"column:tagline2"`
 	Tagline3               *string        `json:"tagline3" gorm:"column:tagline3"`
@@ -40,6 +41,7 @@ type Offering struct {
 	IsVisible              bool           `json:"is_visible" gorm:"is_visible"`
 	Organisation           Organisation   `json:"-" gorm:"foreignkey:OrganisationID;association_foreignkey:ID"`
 	OrganisationID         string         `json:"organisation_id" gorm:"column:organisation_id"`
+	OfferingDirectURL      postgres.Jsonb `json:"offering_direct_url" gorm:"column:offering_direct_url"`
 	CreatedAt              time.Time      `json:"created_at" gorm:"column:created_at"`
 	UpdatedAt              time.Time      `json:"updated_at" gorm:"column:updated_at"`
 	DeletedAt              *time.Time     `json:"-" gorm:"column:deleted_at"`
@@ -69,6 +71,47 @@ func (offering *Offering) Validate() *cigExchange.APIError {
 	if len(offering.OrganisationID) == 0 {
 		return cigExchange.NewInvalidFieldError("organisation_id", "Required field 'organisation_id' missing")
 	}
+
+	// check OfferingDirectURL
+	if len(offering.OfferingDirectURL.RawMessage) == 0 {
+		return cigExchange.NewInvalidFieldError("offering_direct_url", "Required field 'offering_direct_url' missing")
+	}
+	value, err := offering.OfferingDirectURL.MarshalJSON()
+	if err != nil {
+		return cigExchange.NewJSONDecodingError(err)
+	}
+
+	type Langs struct {
+		En string `json:"en"`
+		Fr string `json:"fr"`
+		It string `json:"it"`
+		De string `json:"de"`
+	}
+
+	// check that all languages present
+	var langsObject Langs
+	if err := json.Unmarshal(value, &langsObject); err != nil {
+		return cigExchange.NewJSONDecodingError(err)
+	}
+
+	missingFieldNames := make([]string, 0)
+	if len(langsObject.En) == 0 {
+		missingFieldNames = append(missingFieldNames, "offering_direct_url.en")
+	}
+	if len(langsObject.Fr) == 0 {
+		missingFieldNames = append(missingFieldNames, "offering_direct_url.fr")
+	}
+	if len(langsObject.It) == 0 {
+		missingFieldNames = append(missingFieldNames, "offering_direct_url.it")
+	}
+	if len(langsObject.De) == 0 {
+		missingFieldNames = append(missingFieldNames, "offering_direct_url.de")
+	}
+
+	if len(missingFieldNames) > 0 {
+		return cigExchange.NewRequiredFieldError(missingFieldNames)
+	}
+
 	// check that organisation UUID is valid
 	organization := &Organisation{}
 	db := cigExchange.GetDB().Where(&Organisation{ID: offering.OrganisationID}).First(&organization)
