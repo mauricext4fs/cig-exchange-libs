@@ -19,6 +19,7 @@ var NotFoundHandler = func(next http.Handler) http.Handler {
 const (
 	ErrorTypeBadRequest          = "Bad request"
 	ErrorTypeUnauthorized        = "Unauthorized"
+	ErrorTypeForbidden           = "Forbidden"
 	ErrorTypeInternalServer      = "Internal server error"
 	ErrorTypeUnprocessableEntity = "Unprocessable Entity"
 )
@@ -238,6 +239,15 @@ func NewOrganisationUserDoesntExistError(message string) *APIError {
 func NewAccessRightsError(message string) *APIError {
 	apiErr := &APIError{}
 	apiErr.SetErrorType(ErrorTypeUnauthorized)
+	apiErr.NewNestedError(ReasonNotAllowed, message)
+	return apiErr
+}
+
+// NewAccessForbiddenError creates APIError with ErrorTypeForbidden
+// and nested error with ReasonNotAllowed reason
+func NewAccessForbiddenError(message string) *APIError {
+	apiErr := &APIError{}
+	apiErr.SetErrorType(ErrorTypeForbidden)
 	apiErr.NewNestedError(ReasonNotAllowed, message)
 	return apiErr
 }

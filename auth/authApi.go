@@ -227,24 +227,21 @@ func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler
 			return
 		}
 
-		response := make(map[string]interface{})
 		tokenHeader := r.Header.Get("Authorization") // Grab the token from the header
 
 		if tokenHeader == "" { // Token is missing, returns with error code 403 Unauthorized
-			response = cigExchange.Message(false, "Missing auth token")
-			w.WriteHeader(http.StatusForbidden)
-			w.Header().Add("Content-Type", "application/json")
-			cigExchange.Respond(w, response)
+			apiError := cigExchange.NewAccessForbiddenError("Missing auth token.")
+			fmt.Println(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
 
 		// The token normally comes in format `Bearer {token-body}`, we check if the retrieved token matched this requirement
 		splitted := strings.Split(tokenHeader, " ")
 		if len(splitted) != 2 {
-			response = cigExchange.Message(false, "Invalid/Malformed auth token")
-			w.WriteHeader(http.StatusForbidden)
-			w.Header().Add("Content-Type", "application/json")
-			cigExchange.Respond(w, response)
+			apiError := cigExchange.NewAccessForbiddenError("Invalid/Malformed auth token.")
+			fmt.Println(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
 
@@ -256,18 +253,16 @@ func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler
 		})
 
 		if err != nil { // Malformed token, returns with http code 403 as usual
-			response = cigExchange.Message(false, "Malformed authentication token")
-			w.WriteHeader(http.StatusForbidden)
-			w.Header().Add("Content-Type", "application/json")
-			cigExchange.Respond(w, response)
+			apiError := cigExchange.NewAccessForbiddenError("Malformed authentication token.")
+			fmt.Println(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
 
 		if !token.Valid { // Token is invalid, maybe not signed on this server
-			response = cigExchange.Message(false, "Token is not valid.")
-			w.WriteHeader(http.StatusForbidden)
-			w.Header().Add("Content-Type", "application/json")
-			cigExchange.Respond(w, response)
+			apiError := cigExchange.NewAccessForbiddenError("Token is not valid.")
+			fmt.Println(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
 
@@ -275,15 +270,13 @@ func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler
 		redisKey := tk.UserUUID + "|" + tk.OrganisationUUID
 		redisCmd := cigExchange.GetRedis().Get(redisKey)
 		if redisCmd.Err() != nil {
-			apiError := cigExchange.NewAccessRightsError("Token is not valid.")
-			fmt.Println("Token is not stored in redis")
+			apiError := cigExchange.NewAccessForbiddenError("Token is not valid.")
 			fmt.Println(apiError.ToString())
 			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
 		if redisCmd.Val() != tokenPart {
-			apiError := cigExchange.NewAccessRightsError("Token is not valid.")
-			fmt.Println("Token is not match with redis")
+			apiError := cigExchange.NewAccessForbiddenError("Token is not match.")
 			fmt.Println(apiError.ToString())
 			cigExchange.RespondWithAPIError(w, apiError)
 			return
