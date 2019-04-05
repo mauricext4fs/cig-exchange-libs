@@ -452,7 +452,7 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 		// organisation doesn't exist
 		org = nil
 	} else {
-		if org.Verified == 1 {
+		if org.Status == models.OrganisationStatusVerified {
 			// check user unverified and organisation is verified
 			if existingUser != nil {
 				if existingUser.Status == models.UserStatusUnverified {

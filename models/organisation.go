@@ -15,6 +15,12 @@ const (
 	OrganisationRoleUser  = "user"
 )
 
+// Constants defining the organisation status
+const (
+	OrganisationStatusVerified   = "verified"
+	OrganisationStatusUnverified = "unverified"
+)
+
 // Organisation is a struct to represent an organisation
 type Organisation struct {
 	ID                        string     `json:"id" gorm:"column:id;primary_key"`
@@ -23,7 +29,8 @@ type Organisation struct {
 	Website                   string     `json:"website" gorm:"column:website"`
 	ReferenceKey              string     `json:"reference_key" gorm:"column:reference_key"`
 	OfferingRatingDescription string     `json:"offering_rating_description" gorm:"column:offering_rating_description"`
-	Verified                  int64      `json:"verified" gorm:"column:verified"`
+	Status                    string     `json:"status" gorm:"column:status;default:'unverified'"`
+	Verified                  int64      `json:"-" gorm:"column:verified"`
 	CreatedAt                 time.Time  `json:"created_at" gorm:"column:created_at"`
 	UpdatedAt                 time.Time  `json:"updated_at" gorm:"column:updated_at"`
 	DeletedAt                 *time.Time `json:"-" gorm:"column:deleted_at"`
@@ -53,7 +60,7 @@ func (organisation *Organisation) Create() *cigExchange.APIError {
 	organisation.ID = ""
 
 	// create unverified organisation
-	organisation.Verified = 0
+	organisation.Status = OrganisationStatusUnverified
 
 	if apiErr := organisation.trimFieldsAndValidate(); apiErr != nil {
 		return apiErr
