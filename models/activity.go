@@ -87,3 +87,22 @@ func GetActivitiesForUser(userID string) (userActs []*UserActivity, apiErr *cigE
 	}
 	return
 }
+
+// FindSessionActivity queries session user activity for user from db
+func (activity *UserActivity) FindSessionActivity() (activityResp *UserActivity, apiErr *cigExchange.APIError) {
+
+	sType := ActivityTypeSessionLength
+	activityResp = &UserActivity{}
+	now := time.Now()
+	// session wait time 10 minutes
+	limit := now.Add(time.Duration(-10) * time.Minute)
+	db := cigExchange.GetDB().Where("updated_at > ? and user_id = ? and jwt = ? and type = ?", limit, activity.UserID, activity.JWT, sType).Order("updated_at desc").First(activityResp)
+	if db.Error != nil {
+		if db.RecordNotFound() {
+			activityResp = activity
+			return
+		}
+		return nil, cigExchange.NewDatabaseError("UserActivity lookup failed", db.Error)
+	}
+	return
+}
