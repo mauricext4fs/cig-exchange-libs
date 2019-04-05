@@ -281,6 +281,14 @@ func (orgUser *OrganisationUser) Delete() *cigExchange.APIError {
 		return cigExchange.NewInvalidFieldError("id", "Invalid organisation user id")
 	}
 
+	// remove previous token from redis
+	redisKey := orgUser.UserID + "|" + orgUser.OrganisationID
+
+	intRedisCmd := cigExchange.GetRedis().Del(redisKey)
+	if intRedisCmd.Err() != nil {
+		return cigExchange.NewRedisError("Del token failure", intRedisCmd.Err())
+	}
+
 	db := cigExchange.GetDB().Delete(orgUser)
 	if db.Error != nil {
 		return cigExchange.NewDatabaseError("Error deleting organisation user", db.Error)

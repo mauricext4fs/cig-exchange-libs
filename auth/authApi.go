@@ -26,6 +26,9 @@ const (
 // Expiration time is one month
 const tokenExpirationTimeInMin = 60 * 24 * 31
 
+// Token expiration
+const expiration = time.Minute * tokenExpirationTimeInMin
+
 type userResponse struct {
 	UUID string `json:"uuid"`
 }
@@ -224,24 +227,21 @@ func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler
 			return
 		}
 
-		response := make(map[string]interface{})
 		tokenHeader := r.Header.Get("Authorization") // Grab the token from the header
 
 		if tokenHeader == "" { // Token is missing, returns with error code 403 Unauthorized
-			response = cigExchange.Message(false, "Missing auth token")
-			w.WriteHeader(http.StatusForbidden)
-			w.Header().Add("Content-Type", "application/json")
-			cigExchange.Respond(w, response)
+			apiError := cigExchange.NewAccessForbiddenError("Missing auth token.")
+			fmt.Println(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
 
 		// The token normally comes in format `Bearer {token-body}`, we check if the retrieved token matched this requirement
 		splitted := strings.Split(tokenHeader, " ")
 		if len(splitted) != 2 {
-			response = cigExchange.Message(false, "Invalid/Malformed auth token")
-			w.WriteHeader(http.StatusForbidden)
-			w.Header().Add("Content-Type", "application/json")
-			cigExchange.Respond(w, response)
+			apiError := cigExchange.NewAccessForbiddenError("Invalid/Malformed auth token.")
+			fmt.Println(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
 
@@ -253,18 +253,32 @@ func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler
 		})
 
 		if err != nil { // Malformed token, returns with http code 403 as usual
-			response = cigExchange.Message(false, "Malformed authentication token")
-			w.WriteHeader(http.StatusForbidden)
-			w.Header().Add("Content-Type", "application/json")
-			cigExchange.Respond(w, response)
+			apiError := cigExchange.NewAccessForbiddenError("Malformed authentication token.")
+			fmt.Println(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
 
 		if !token.Valid { // Token is invalid, maybe not signed on this server
-			response = cigExchange.Message(false, "Token is not valid.")
-			w.WriteHeader(http.StatusForbidden)
-			w.Header().Add("Content-Type", "application/json")
-			cigExchange.Respond(w, response)
+			apiError := cigExchange.NewAccessForbiddenError("Token is not valid.")
+			fmt.Println(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
+			return
+		}
+
+		// check token in redis
+		redisKey := tk.UserUUID + "|" + tk.OrganisationUUID
+		redisCmd := cigExchange.GetRedis().Get(redisKey)
+		if redisCmd.Err() != nil {
+			apiError := cigExchange.NewAccessForbiddenError("Token is not valid.")
+			fmt.Println(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
+			return
+		}
+		if redisCmd.Val() != tokenPart {
+			apiError := cigExchange.NewAccessForbiddenError("Token is not match.")
+			fmt.Println(apiError.ToString())
+			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
 
@@ -839,7 +853,7 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 		organisationUser.OrganisationID,
 		jwt.StandardClaims{
 			IssuedAt:  time.Now().Unix(),
-			ExpiresAt: time.Now().Add(time.Minute * tokenExpirationTimeInMin).Unix(),
+			ExpiresAt: time.Now().Add(expiration).Unix(),
 		},
 	}
 	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tk)
@@ -849,6 +863,16 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 		fmt.Println("VerifyCode: jwt generation failed:")
 		fmt.Println(err.Error())
 		cigExchange.RespondWithAPIError(w, secureErrorResponse)
+		return
+	}
+
+	// save token in redis
+	redisKey := tk.UserUUID + "|" + tk.OrganisationUUID
+
+	redisCmd := cigExchange.GetRedis().Set(redisKey, tokenString, expiration)
+	if redisCmd.Err() != nil {
+		*apiErrorP = cigExchange.NewRedisError("Set token failure", redisCmd.Err())
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
@@ -981,15 +1005,103 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	// remove previous token from redis
+	redisKey := loggedInUser.UserUUID + "|" + loggedInUser.OrganisationUUID
+
+	intRedisCmd := cigExchange.GetRedis().Del(redisKey)
+	if intRedisCmd.Err() != nil {
+		*apiErrorP = cigExchange.NewRedisError("Del token failure", intRedisCmd.Err())
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
+		return
+	}
+
+	// save token in redis
+	redisKey = tk.UserUUID + "|" + tk.OrganisationUUID
+
+	redisCmd := cigExchange.GetRedis().Set(redisKey, tokenString, expiration)
+	if redisCmd.Err() != nil {
+		*apiErrorP = cigExchange.NewRedisError("Set token failure", redisCmd.Err())
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
+		return
+	}
+
 	resp := &jwtResponse{
 		JWT: tokenString,
 	}
 	cigExchange.Respond(w, resp)
-	CreateUserActivity(loggedInUserP, apiErrorP, models.ActivityTypeSessionLength)
+}
+
+// PingJWT handles GET api/ping-jwt endpoint
+func (userAPI *UserAPI) PingJWT(w http.ResponseWriter, r *http.Request) {
+
+	// create user activity record and print error with defer
+	apiErrorP, loggedInUserP := PrepareActivityVariables()
+	defer cigExchange.PrintAPIError(apiErrorP)
+
+	// load context user info
+	loggedInUser, err := GetContextValues(r)
+	if err != nil {
+		*apiErrorP = cigExchange.NewRoutingError(err)
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
+		return
+	}
+	*loggedInUserP = loggedInUser
+
+	apiError := UpdateUserActivity(loggedInUserP, apiErrorP, models.ActivityTypeSessionLength)
+	if apiError != nil {
+		*apiErrorP = apiError
+		cigExchange.RespondWithAPIError(w, *apiErrorP)
+		return
+	}
+
+	w.WriteHeader(204)
 }
 
 // CreateUserActivity inserts new user activity object into db
 func CreateUserActivity(loggedInUserP **LoggedInUser, apiErrorP **cigExchange.APIError, activityType string) *cigExchange.APIError {
+
+	activity, apiErr := convertToUserActivity(loggedInUserP, apiErrorP, activityType)
+	if apiErr != nil {
+		fmt.Println(apiErr.ToString())
+		return apiErr
+	}
+
+	// create user activity record
+	err := cigExchange.GetDB().Create(activity).Error
+	if err != nil {
+		apiErr = cigExchange.NewDatabaseError("Create user activity call failed", err)
+		fmt.Println(apiErr.ToString())
+		return apiErr
+	}
+	return nil
+}
+
+// UpdateUserActivity inserts new user activity object into db
+func UpdateUserActivity(loggedInUserP **LoggedInUser, apiErrorP **cigExchange.APIError, activityType string) *cigExchange.APIError {
+
+	activity, apiErr := convertToUserActivity(loggedInUserP, apiErrorP, activityType)
+	if apiErr != nil {
+		fmt.Println(apiErr.ToString())
+		return apiErr
+	}
+
+	activitySave, apiErr := activity.FindSessionActivity()
+	if apiErr != nil {
+		fmt.Println(apiErr.ToString())
+		return apiErr
+	}
+
+	// create user activity record
+	err := cigExchange.GetDB().Save(activitySave).Error
+	if err != nil {
+		apiErr = cigExchange.NewDatabaseError("Update user activity call failed", err)
+		fmt.Println(apiErr.ToString())
+		return apiErr
+	}
+	return nil
+}
+
+func convertToUserActivity(loggedInUserP **LoggedInUser, apiErrorP **cigExchange.APIError, activityType string) (*models.UserActivity, *cigExchange.APIError) {
 
 	loggedInUser := *loggedInUserP
 	apiError := *apiErrorP
@@ -1005,8 +1117,7 @@ func CreateUserActivity(loggedInUserP **LoggedInUser, apiErrorP **cigExchange.AP
 		jsonBytes, err := json.Marshal(loggedInUser)
 		if err != nil {
 			apiErr := cigExchange.NewJSONEncodingError(err)
-			fmt.Println(apiErr.ToString())
-			return apiErr
+			return activity, apiErr
 		}
 
 		activity.JWT = postgres.Jsonb{RawMessage: jsonBytes}
@@ -1017,8 +1128,7 @@ func CreateUserActivity(loggedInUserP **LoggedInUser, apiErrorP **cigExchange.AP
 		jsonBytes, err := json.Marshal(apiError)
 		if err != nil {
 			apiErr := cigExchange.NewJSONEncodingError(err)
-			fmt.Println(apiErr.ToString())
-			return apiErr
+			return activity, apiErr
 		}
 		jsonStr := string(jsonBytes)
 		activity.Info = &jsonStr
@@ -1030,18 +1140,9 @@ func CreateUserActivity(loggedInUserP **LoggedInUser, apiErrorP **cigExchange.AP
 		apiErr.SetErrorType(cigExchange.ErrorTypeInternalServer)
 
 		apiErr.NewNestedError(cigExchange.ReasonUserActivityFailure, "Missing activity type")
-		fmt.Println(apiErr.ToString())
-		return apiErr
+		return activity, apiErr
 	}
-
-	// create user activity record
-	err := cigExchange.GetDB().Create(activity).Error
-	if err != nil {
-		apiErr := cigExchange.NewDatabaseError("Create user activity call failed", err)
-		fmt.Println(apiErr.ToString())
-		return apiErr
-	}
-	return nil
+	return activity, nil
 }
 
 // CreateCustomUserActivity inserts custom user activity object into db
