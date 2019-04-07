@@ -165,6 +165,21 @@ func GetOrganisations(userUUID string) ([]*Organisation, *cigExchange.APIError) 
 	return organisations, nil
 }
 
+// GetAllOrganisations queries all organisations from db
+func GetAllOrganisations() ([]*Organisation, *cigExchange.APIError) {
+
+	orgs := make([]*Organisation, 0)
+	// find all userActivities objects for organisation
+	db := cigExchange.GetDB().Find(&orgs)
+	if db.Error != nil {
+		if !db.RecordNotFound() {
+			apiErr := cigExchange.NewDatabaseError("UserActivity lookup failed", db.Error)
+			return orgs, apiErr
+		}
+	}
+	return orgs, nil
+}
+
 func (organisation *Organisation) trimFieldsAndValidate() *cigExchange.APIError {
 
 	organisation.Name = strings.TrimSpace(organisation.Name)
