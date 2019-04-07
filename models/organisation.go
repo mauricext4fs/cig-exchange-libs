@@ -2,6 +2,7 @@ package models
 
 import (
 	cigExchange "cig-exchange-libs"
+	"fmt"
 	"strings"
 	"time"
 
@@ -199,6 +200,84 @@ func (organisation *Organisation) trimFieldsAndValidate() *cigExchange.APIError 
 		return cigExchange.NewRequiredFieldError(missingFieldNames)
 	}
 	return nil
+}
+
+// OrganisationInfo is a struct to store dashboard values
+type OrganisationInfo struct {
+	TotalOfferings  int     `json:"total_offerings"`
+	TotalUsers      int     `json:"total_users"`
+	TotalAmount     float32 `json:"total_amount"`
+	RemainingAmount float32 `json:"remaining_amount"`
+}
+
+// GetOrganisationInfo returns values for organisation dashboard
+func GetOrganisationInfo(organisationID string) (*OrganisationInfo, *cigExchange.APIError) {
+
+	organisationInfo := &OrganisationInfo{}
+
+	// get total offerings
+	var count int
+	db := cigExchange.GetDB().Model(&Offering{}).Where("organisation_id = ?", organisationID).Count(&count)
+	if db.Error != nil {
+		return nil, cigExchange.NewDatabaseError("Get total offerings for organisation failed", db.Error)
+	}
+	organisationInfo.TotalOfferings = count
+
+	// get total users
+	db = cigExchange.GetDB().Model(&OrganisationUser{}).Where("organisation_id = ? and status = ?", organisationID, OrganisationUserStatusActive).Count(&count)
+	if db.Error != nil {
+		return nil, cigExchange.NewDatabaseError("Get total users for organisation failed", db.Error)
+	}
+	organisationInfo.TotalUsers = count
+
+	// get
+	row := cigExchange.GetDB().Model(&Offering{}).Select("sum(amount), sum(remaining)").Where("organisation_id = ?", organisationID).Row()
+
+	var amount float32
+	var remaining float32
+	err := row.Scan(&amount, &remaining)
+	if err != nil {
+		fmt.Println(cigExchange.NewDatabaseError("Get total and remaininig amount for organisation failed", err).ToString())
+		return organisationInfo, nil
+	}
+	organisationInfo.TotalAmount = amount
+	organisationInfo.RemainingAmount = remaining
+
+	return organisationInfo, nil
+}
+
+// OrganisationUserInfo is a struct to store dashboard values
+type OrganisationUserInfo struct {
+	Name     string  `json:"name"`
+	LastName string  `json:"lastname"`
+	UserID   string  `json:"user_id"`
+	Count    float32 `json:"count"`
+}
+
+// GetOrganisationUsersInfo returns values for organisation users dashboard
+func GetOrganisationUsersInfo(organisationID string) ([]*OrganisationUserInfo, *cigExchange.APIError) {
+
+	organisationUsersInfo := make([]*OrganisationUserInfo, 0)
+
+	selectS := "SELECT \"user\".name, \"user\".lastname, user_id, COUNT (user_id) as count FROM public.user_activity "
+	joinS := "INNER JOIN public.user ON public.user_activity.user_id = public.user.id "
+	whereS := "WHERE type = 'user_session' and jwt @> '{\"organisation_id\": \"" + organisationID + "\"}' "
+	groupS := "GROUP BY user_id, \"user\".name, \"user\".lastname;"
+	// get user sessions
+	rows, err := cigExchange.GetDB().Raw(selectS + joinS + whereS + groupS).Rows()
+	if err != nil {
+		return nil, cigExchange.NewDatabaseError("Get user sessions for organisation failed", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		orgUserInfo := &OrganisationUserInfo{}
+		err = rows.Scan(&orgUserInfo.Name, &orgUserInfo.LastName, &orgUserInfo.UserID, &orgUserInfo.Count)
+		if err == nil {
+			organisationUsersInfo = append(organisationUsersInfo, orgUserInfo)
+		}
+	}
+
+	return organisationUsersInfo, nil
 }
 
 // Constants defining the organisation user status

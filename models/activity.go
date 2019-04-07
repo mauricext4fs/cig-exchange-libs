@@ -32,6 +32,7 @@ const (
 	ActivityTypeUpdateOffering     = "update_offering"
 	ActivityTypeDeleteOffering     = "delete_offering"
 	ActivityTypeGetUsers           = "get_users"
+	ActivityTypeAddUser            = "add_user"
 	ActivityTypeDeleteUser         = "delete_user"
 	ActivityTypeCreateInvitation   = "create_invitation"
 	ActivityTypeGetInvitations     = "get_invitations"
@@ -40,6 +41,7 @@ const (
 	ActivityTypeCreateUserActivity = "create_user_activity"
 	ActivityTypeUserInfo           = "get_user_info"
 	ActivityTypeGetUserActivities  = "get_user_activities"
+	ActivityTypeGetDashboard       = "get_dashboard"
 )
 
 // UnknownUser user for trading api calls
