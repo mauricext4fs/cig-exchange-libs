@@ -13,38 +13,38 @@ import (
 
 // Offering is a struct to represent an offering
 type Offering struct {
-	ID                     string         `json:"id" gorm:"column:id;primary_key"`
-	Title                  string         `json:"title" gorm:"column:title"`
-	Type                   pq.StringArray `json:"type" gorm:"column:type"`
-	Description            *string        `json:"description" gorm:"column:description"`
-	Rating                 string         `json:"rating" gorm:"column:rating"`
-	Slug                   *string        `json:"slug" gorm:"column:slug"`
-	Amount                 float64        `json:"amount" gorm:"column:amount"`
-	Remaining              float64        `json:"remaining" gorm:"column:remaining"`
-	Interest               float64        `json:"interest" gorm:"column:interest"`
-	Period                 *int64         `json:"period" gorm:"column:period"`
-	Origin                 string         `json:"origin" gorm:"column:origin"`
-	Map                    postgres.Jsonb `json:"map" gorm:"column:map"`
-	Location               *string        `json:"location" gorm:"column:location"`
-	Tagline1               *string        `json:"tagline1" gorm:"column:tagline1"`
-	Tagline2               *string        `json:"tagline2" gorm:"column:tagline2"`
-	Tagline3               *string        `json:"tagline3" gorm:"column:tagline3"`
-	CurrentDebtLevel       *string        `json:"current_debt_level" gorm:"column:current_debt_level"`
-	CurrentDebtEndDatetime *string        `json:"current_debt_end_datetime" gorm:"column:current_debt_end_datetime;type:date"`
-	AmountAlreadyTaken     *float64       `json:"amount_already_taken" gorm:"column:amount_already_taken"`
-	MinimumInvestment      *float64       `json:"minimum_investment" gorm:"column:minimum_investment"`
-	MaximumInvestment      *float64       `json:"maximum_investment" gorm:"column:maximum_investment"`
-	TransactionFee         *float64       `json:"transaction_fee" gorm:"column:transaction_fee"`
-	P2PFee                 *float64       `json:"p2p_fee" gorm:"column:p2p_fee"`
-	ReferralReward         *float64       `json:"referral_reward" gorm:"column:referral_reward"`
-	ClosingDate            *string        `json:"closing_date" gorm:"column:closing_date"`
-	IsVisible              bool           `json:"is_visible" gorm:"is_visible"`
-	Organisation           Organisation   `json:"-" gorm:"foreignkey:OrganisationID;association_foreignkey:ID"`
-	OrganisationID         string         `json:"organisation_id" gorm:"column:organisation_id"`
-	OfferingDirectURL      postgres.Jsonb `json:"offering_direct_url" gorm:"column:offering_direct_url"`
-	CreatedAt              time.Time      `json:"created_at" gorm:"column:created_at"`
-	UpdatedAt              time.Time      `json:"updated_at" gorm:"column:updated_at"`
-	DeletedAt              *time.Time     `json:"-" gorm:"column:deleted_at"`
+	ID                     string          `json:"id" gorm:"column:id;primary_key"`
+	Title                  postgres.Jsonb  `json:"title" gorm:"column:title"`
+	Type                   pq.StringArray  `json:"type" gorm:"column:type"`
+	Description            *postgres.Jsonb `json:"description" gorm:"column:description"`
+	Rating                 postgres.Jsonb  `json:"rating" gorm:"column:rating"`
+	Slug                   *postgres.Jsonb `json:"slug" gorm:"column:slug"`
+	Amount                 float64         `json:"amount" gorm:"column:amount"`
+	Remaining              float64         `json:"remaining" gorm:"column:remaining"`
+	Interest               float64         `json:"interest" gorm:"column:interest"`
+	Period                 *int64          `json:"period" gorm:"column:period"`
+	Origin                 postgres.Jsonb  `json:"origin" gorm:"column:origin"`
+	Map                    postgres.Jsonb  `json:"map" gorm:"column:map"`
+	Location               *postgres.Jsonb `json:"location" gorm:"column:location"`
+	Tagline1               *postgres.Jsonb `json:"tagline1" gorm:"column:tagline1"`
+	Tagline2               *postgres.Jsonb `json:"tagline2" gorm:"column:tagline2"`
+	Tagline3               *postgres.Jsonb `json:"tagline3" gorm:"column:tagline3"`
+	CurrentDebtLevel       *postgres.Jsonb `json:"current_debt_level" gorm:"column:current_debt_level"`
+	CurrentDebtEndDatetime *string         `json:"current_debt_end_datetime" gorm:"column:current_debt_end_datetime;type:date"`
+	AmountAlreadyTaken     *float64        `json:"amount_already_taken" gorm:"column:amount_already_taken"`
+	MinimumInvestment      *float64        `json:"minimum_investment" gorm:"column:minimum_investment"`
+	MaximumInvestment      *float64        `json:"maximum_investment" gorm:"column:maximum_investment"`
+	TransactionFee         *float64        `json:"transaction_fee" gorm:"column:transaction_fee"`
+	P2PFee                 *float64        `json:"p2p_fee" gorm:"column:p2p_fee"`
+	ReferralReward         *float64        `json:"referral_reward" gorm:"column:referral_reward"`
+	ClosingDate            *string         `json:"closing_date" gorm:"column:closing_date"`
+	IsVisible              bool            `json:"is_visible" gorm:"is_visible"`
+	Organisation           Organisation    `json:"-" gorm:"foreignkey:OrganisationID;association_foreignkey:ID"`
+	OrganisationID         string          `json:"organisation_id" gorm:"column:organisation_id"`
+	OfferingDirectURL      postgres.Jsonb  `json:"offering_direct_url" gorm:"column:offering_direct_url"`
+	CreatedAt              time.Time       `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt              time.Time       `json:"updated_at" gorm:"column:updated_at"`
+	DeletedAt              *time.Time      `json:"-" gorm:"column:deleted_at"`
 }
 
 // TableName returns table name for struct
@@ -62,6 +62,12 @@ func (*Offering) BeforeCreate(scope *gorm.Scope) error {
 	scope.SetColumn("ID", UUID.String())
 
 	return nil
+}
+
+// GetMultilangFields returns jsonb fields
+func (offering *Offering) GetMultilangFields() []string {
+
+	return []string{"title", "slug", "origin", "description", "location", "tagline1", "tagline2", "tagline3", "current_debt_level", "rating"}
 }
 
 // Validate checks that:
@@ -107,6 +113,12 @@ func (offering *Offering) Validate() *cigExchange.APIError {
 	if len(langsObject.De) == 0 {
 		missingFieldNames = append(missingFieldNames, "offering_direct_url.de")
 	}
+	if len(offering.Origin.RawMessage) == 0 {
+		missingFieldNames = append(missingFieldNames, "origin")
+	}
+	if len(offering.Title.RawMessage) == 0 {
+		missingFieldNames = append(missingFieldNames, "title")
+	}
 
 	if len(missingFieldNames) > 0 {
 		return cigExchange.NewRequiredFieldError(missingFieldNames)
@@ -150,11 +162,6 @@ func (offering *Offering) Update(update map[string]interface{}) *cigExchange.API
 	// check that UUID is set
 	if _, ok := update["id"]; !ok || len(offering.ID) == 0 {
 		return cigExchange.NewInvalidFieldError("offering_id", "Offering UUID is not set")
-	}
-
-	apiError := offering.Validate()
-	if apiError != nil {
-		return apiError
 	}
 
 	db := cigExchange.GetDB().Model(offering).Updates(update)
