@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"sort"
 
 	"github.com/mattbaird/gochimp"
 )
@@ -76,7 +77,7 @@ func PrintAPIError(apiErrorP **APIError) {
 }
 
 // FilterUnknownFields prepares map[string]interface{} for gorm Update
-func FilterUnknownFields(model interface{}, d map[string]interface{}) map[string]interface{} {
+func FilterUnknownFields(model interface{}, fields []string, d map[string]interface{}) map[string]interface{} {
 
 	result := make(map[string]interface{})
 
@@ -87,6 +88,7 @@ func FilterUnknownFields(model interface{}, d map[string]interface{}) map[string
 	// iterate fields
 	for i := 0; i < s.NumField(); i++ {
 		for jsonName, value := range d {
+			// always skip ignored fields
 			for _, ignoreField := range ignoreFields {
 				if jsonName == ignoreField {
 					continue
@@ -94,6 +96,13 @@ func FilterUnknownFields(model interface{}, d map[string]interface{}) map[string
 			}
 			if typeOfP.Field(i).Tag.Get("json") == jsonName {
 				result[jsonName] = value
+			} else {
+				// don't filter keys from 'fields'
+				sort.Strings(fields)
+				i := sort.SearchStrings(fields, jsonName)
+				if i < len(fields) && fields[i] == jsonName {
+					result[jsonName] = value
+				}
 			}
 		}
 	}

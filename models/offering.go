@@ -23,7 +23,7 @@ type Offering struct {
 	Remaining              float64         `json:"remaining" gorm:"column:remaining"`
 	Interest               float64         `json:"interest" gorm:"column:interest"`
 	Period                 *int64          `json:"period" gorm:"column:period"`
-	Origin                 string          `json:"origin" gorm:"column:origin"`
+	Origin                 postgres.Jsonb  `json:"origin" gorm:"column:origin"`
 	Map                    postgres.Jsonb  `json:"map" gorm:"column:map"`
 	Location               *postgres.Jsonb `json:"location" gorm:"column:location"`
 	Tagline1               *postgres.Jsonb `json:"tagline1" gorm:"column:tagline1"`
@@ -67,7 +67,7 @@ func (*Offering) BeforeCreate(scope *gorm.Scope) error {
 // GetMultilangFields returns jsonb fields
 func (offering *Offering) GetMultilangFields() []string {
 
-	return []string{"title", "slug", "description", "location", "tagline1", "tagline2", "tagline3", "current_debt_level", "rating", "offering_direct_url"}
+	return []string{"title", "slug", "origin", "description", "location", "tagline1", "tagline2", "tagline3", "current_debt_level", "rating"}
 }
 
 // Validate checks that:
@@ -113,7 +113,7 @@ func (offering *Offering) Validate() *cigExchange.APIError {
 	if len(langsObject.De) == 0 {
 		missingFieldNames = append(missingFieldNames, "offering_direct_url.de")
 	}
-	if len(offering.Origin) == 0 {
+	if len(offering.Origin.RawMessage) == 0 {
 		missingFieldNames = append(missingFieldNames, "origin")
 	}
 	if len(offering.Title.RawMessage) == 0 {
