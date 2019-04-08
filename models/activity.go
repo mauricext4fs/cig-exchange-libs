@@ -42,6 +42,7 @@ const (
 	ActivityTypeUserInfo           = "get_user_info"
 	ActivityTypeGetUserActivities  = "get_user_activities"
 	ActivityTypeGetDashboard       = "get_dashboard"
+	ActivityTypeOfferingClick      = "offering_click"
 )
 
 // UnknownUser user for trading api calls
