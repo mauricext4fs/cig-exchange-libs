@@ -280,6 +280,39 @@ func GetOrganisationUsersInfo(organisationID string) ([]*OrganisationUserInfo, *
 	return organisationUsersInfo, nil
 }
 
+// OrganisationOfferingsTypeBreakdown is a struct to store dashboard values
+type OrganisationOfferingsTypeBreakdown struct {
+	Type  string `json:"type"`
+	Count int    `json:"count"`
+}
+
+// GetOfferingsTypeBreakdown returns values for organisation offerings breakdown
+func GetOfferingsTypeBreakdown(organisationID string) ([]*OrganisationOfferingsTypeBreakdown, *cigExchange.APIError) {
+
+	organisationOfferings := make([]*OrganisationOfferingsTypeBreakdown, 0)
+
+	selectS := "SELECT count(x.offering_type) as total, x.offering_type FROM public.offering o , LATERAL "
+	lateralS := "(SELECT unnest(o.type) AS offering_type) x "
+	whereS := "WHERE o.organisation_id = '" + organisationID + "' "
+	groupS := "GROUP BY x.offering_type ORDER BY total DESC;"
+	// get organisation offerings breakdown
+	rows, err := cigExchange.GetDB().Raw(selectS + lateralS + whereS + groupS).Rows()
+	if err != nil {
+		return nil, cigExchange.NewDatabaseError("Get offerings type breakdown for organisation failed", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		// fill one offering type
+		orgOffering := &OrganisationOfferingsTypeBreakdown{}
+		err = rows.Scan(&orgOffering.Count, &orgOffering.Type)
+		if err == nil {
+			organisationOfferings = append(organisationOfferings, orgOffering)
+		}
+	}
+
+	return organisationOfferings, nil
+}
+
 // Constants defining the organisation user status
 const (
 	OrganisationUserStatusInvited    = "invited"
