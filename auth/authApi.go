@@ -968,24 +968,35 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 	}
 	*loggedInUserP = loggedInUser
 
-	// find organisation user
-	searchOrgUser := &models.OrganisationUser{
-		OrganisationID: organisationID,
-		UserID:         loggedInUser.UserUUID,
-	}
-
-	orgUser, apiError := searchOrgUser.Find()
+	// check admin
+	userRole, apiError := GetUserRole(loggedInUser.UserUUID)
 	if apiError != nil {
 		*apiErrorP = apiError
 		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
-	// check that user belong to organisation
-	if orgUser.UserID != loggedInUser.UserUUID {
-		*apiErrorP = cigExchange.NewInvalidFieldError("organisation_id", "User don't belong to organisation")
-		cigExchange.RespondWithAPIError(w, *apiErrorP)
-		return
+	// skip check for admin
+	if userRole != models.UserRoleAdmin {
+		// find organisation user
+		searchOrgUser := &models.OrganisationUser{
+			OrganisationID: organisationID,
+			UserID:         loggedInUser.UserUUID,
+		}
+
+		orgUser, apiError := searchOrgUser.Find()
+		if apiError != nil {
+			*apiErrorP = apiError
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
+			return
+		}
+
+		// check that user belong to organisation
+		if orgUser.UserID != loggedInUser.UserUUID {
+			*apiErrorP = cigExchange.NewInvalidFieldError("organisation_id", "User don't belong to organisation")
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
+			return
+		}
 	}
 
 	// verification passed, generate jwt and return it
