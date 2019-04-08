@@ -536,7 +536,7 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 		// organisationUser doesn't exist
 		orgUser = &models.OrganisationUser{
 			UserID:           existingUser.ID,
-			OrganisationID:   organisation.ID,
+			OrganisationID:   org.ID,
 			OrganisationRole: models.OrganisationRoleUser,
 			IsHome:           false,
 			Status:           models.OrganisationUserStatusUnverified,
