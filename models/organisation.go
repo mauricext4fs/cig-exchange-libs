@@ -2,11 +2,13 @@ package models
 
 import (
 	cigExchange "cig-exchange-libs"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/jinzhu/gorm"
+	"github.com/jinzhu/gorm/dialects/postgres"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -311,6 +313,91 @@ func GetOfferingsTypeBreakdown(organisationID string) ([]*OrganisationOfferingsT
 	}
 
 	return organisationOfferings, nil
+}
+
+// OrganisationOfferingClicks is a struct to store dashboard values
+type OrganisationOfferingClicks struct {
+	OfferingID       string         `json:"offering_id"`
+	OfferingTitle    string         `json:"title"`
+	OfferingTitleMap postgres.Jsonb `json:"title_map"`
+	Count            int            `json:"count"`
+}
+
+// GetOfferingsClicks returns values for offering clicks
+func GetOfferingsClicks(organisationID string) ([]*OrganisationOfferingClicks, *cigExchange.APIError) {
+
+	offerings := make([]*Offering, 0)
+	offeringsClicks := make([]*OrganisationOfferingClicks, 0)
+
+	// get all offerings for organisation
+	db := cigExchange.GetDB().Where(&Offering{OrganisationID: organisationID}).Find(&offerings)
+	if db.Error != nil {
+		if !db.RecordNotFound() {
+			return offeringsClicks, cigExchange.NewDatabaseError("Offerings lookup failed", db.Error)
+		}
+	}
+
+	for _, offering := range offerings {
+		clicks := &OrganisationOfferingClicks{
+			OfferingID:       offering.ID,
+			OfferingTitleMap: offering.Title,
+		}
+
+		offeringMap := make(map[string]interface{})
+		// marshal to json
+		offeringBytes, err := json.Marshal(offering)
+		if err != nil {
+			return offeringsClicks, cigExchange.NewJSONEncodingError(err)
+		}
+
+		// fill map
+		err = json.Unmarshal(offeringBytes, &offeringMap)
+		if err != nil {
+			return offeringsClicks, cigExchange.NewJSONDecodingError(err)
+		}
+
+		val, ok := offeringMap["title"]
+		if !ok {
+			continue
+		}
+		if val != nil {
+			mapLang, ok := val.(map[string]interface{})
+			if ok {
+				if v, ok := mapLang["en"]; ok {
+					valStr, ok := v.(string)
+					if ok {
+						clicks.OfferingTitle = valStr
+					}
+				} else if v, ok := mapLang["fr"]; ok {
+					valStr, ok := v.(string)
+					if ok {
+						clicks.OfferingTitle = valStr
+					}
+				} else if v, ok := mapLang["it"]; ok {
+					valStr, ok := v.(string)
+					if ok {
+						clicks.OfferingTitle = valStr
+					}
+				} else if v, ok := mapLang["de"]; ok {
+					valStr, ok := v.(string)
+					if ok {
+						clicks.OfferingTitle = valStr
+					}
+				}
+			}
+		}
+		selectS := "SELECT count(*) as total FROM public.user_activity WHERE type = 'offering_click' and info ~ '" + offering.ID + "';"
+		// get organisation offerings breakdown
+		row := cigExchange.GetDB().Raw(selectS).Row()
+		var amount int
+		err = row.Scan(&amount)
+		if err == nil {
+			clicks.Count = amount
+		}
+		offeringsClicks = append(offeringsClicks, clicks)
+	}
+
+	return offeringsClicks, nil
 }
 
 // Constants defining the organisation user status
