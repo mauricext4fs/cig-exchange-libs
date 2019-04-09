@@ -449,7 +449,7 @@ func GetUserByEmail(email string, ignoreRecordNotFound bool) (user *User, apiErr
 	}
 
 	if user == nil && !ignoreRecordNotFound {
-		apiErr = cigExchange.NewDatabaseError("User lookup failed", db.Error)
+		apiErr = cigExchange.NewUserDoesntExistError("User lookup failed")
 	}
 
 	return
