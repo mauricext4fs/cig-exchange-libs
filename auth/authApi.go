@@ -170,49 +170,6 @@ func GetContextValues(r *http.Request) (loggedInUser *LoggedInUser, err error) {
 	return
 }
 
-// GetUserRole returns user role
-func GetUserRole(userUUID string) (role string, apiError *cigExchange.APIError) {
-
-	// check user id
-	if len(userUUID) == 0 {
-		return "", cigExchange.NewInvalidFieldError("user_id", "UserID is invalid")
-	}
-
-	// get user
-	user, apiErr := models.GetUser(userUUID)
-	if apiErr != nil {
-		return "", apiErr
-	}
-
-	return user.Role, nil
-}
-
-// GetOrgUserRole returns user role in organisation
-func GetOrgUserRole(userUUID, organisationUUID string) (role string, apiError *cigExchange.APIError) {
-
-	// check user id
-	if len(userUUID) == 0 {
-		return "", cigExchange.NewInvalidFieldError("user_id", "UserID is invalid")
-	}
-
-	// check organisation id
-	if len(organisationUUID) == 0 {
-		return "", cigExchange.NewInvalidFieldError("organization_id", "OrganisationID is invalid")
-	}
-
-	// get role in organisation
-	orgUserWhere := &models.OrganisationUser{
-		OrganisationID: organisationUUID,
-		UserID:         userUUID,
-	}
-	orgUser, apiErr := orgUserWhere.Find()
-	if apiErr != nil {
-		return "", apiErr
-	}
-
-	return orgUser.OrganisationRole, nil
-}
-
 // JwtAuthenticationHandler handles auth for endpoints
 func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler {
 
@@ -336,7 +293,7 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	// try to create user
-	apiError := user.Create(userReq.ReferenceKey)
+	createdUser, apiError := models.CreateUser(user, userReq.ReferenceKey)
 	if apiError != nil {
 		*apiErrorP = apiError
 		if (*apiErrorP).ShouldSilenceError() {
@@ -356,7 +313,7 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 		}
 	}()
 
-	resp.UUID = user.ID
+	resp.UUID = createdUser.ID
 	cigExchange.Respond(w, resp)
 }
 
@@ -505,7 +462,7 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 	// user doesn't exists
 	if existingUser == nil {
 		// try to create user with reference key
-		apiError = user.Create(org.ReferenceKey)
+		existingUser, apiError = models.CreateUser(user, org.ReferenceKey)
 		if apiError != nil {
 			*apiErrorP = apiError
 			if apiError.ShouldSilenceError() {
@@ -515,7 +472,6 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 			}
 			return
 		}
-		existingUser = user
 	}
 
 	// query organisationUser
@@ -969,7 +925,7 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 	*loggedInUserP = loggedInUser
 
 	// check admin
-	userRole, apiError := GetUserRole(loggedInUser.UserUUID)
+	userRole, apiError := models.GetUserRole(loggedInUser.UserUUID)
 	if apiError != nil {
 		*apiErrorP = apiError
 		cigExchange.RespondWithAPIError(w, *apiErrorP)

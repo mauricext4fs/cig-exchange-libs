@@ -56,49 +56,15 @@ func (user *User) BeforeCreate(scope *gorm.Scope) error {
 	return nil
 }
 
-// Create inserts new user object into db
-func (user *User) Create(referenceKey string) *cigExchange.APIError {
+// CreateUser inserts new user object into db
+func CreateUser(user *User, referenceKey string) (*User, *cigExchange.APIError) {
 
 	// invalidate the uuid
 	user.ID = ""
 
 	apiErr := user.TrimFieldsAndValidate()
 	if apiErr != nil {
-		return apiErr
-	}
-
-	contacts := make([]Contact, 0)
-
-	// check that email is unique
-	db := cigExchange.GetDB().Where("value1 = ?", user.LoginEmail.Value1).Find(&contacts)
-	if db.Error != nil {
-		// we expect record not found error here
-		if !db.RecordNotFound() {
-			return cigExchange.NewDatabaseError("Contact lookup failed", db.Error)
-		}
-	} else {
-		unverifiedUsers := make([]*User, 0)
-		for _, contact := range contacts {
-			// handle existing users
-			existingUser := &User{}
-			if cigExchange.GetDB().Model(contact).Related(existingUser, "LoginEmail").Error == nil {
-				if existingUser.Status == UserStatusVerified {
-					apiErr = &cigExchange.APIError{}
-					apiErr.SetErrorType(cigExchange.ErrorTypeUnauthorized)
-					apiErr.NewNestedError(cigExchange.ReasonUserAlreadyExists, "User already exists and is verified")
-					return apiErr
-				}
-				// add to unverified users
-				unverifiedUsers = append(unverifiedUsers, existingUser)
-			}
-		}
-
-		for _, unverifiedUser := range unverifiedUsers {
-			apiError := deleteUnverifiedUser(unverifiedUser)
-			if apiError != nil {
-				return apiError
-			}
-		}
+		return nil, apiErr
 	}
 
 	org := &Organisation{}
@@ -108,7 +74,7 @@ func (user *User) Create(referenceKey string) *cigExchange.APIError {
 		orgWhere := &Organisation{
 			ReferenceKey: referenceKey,
 		}
-		db = cigExchange.GetDB().Where(orgWhere).First(org)
+		db := cigExchange.GetDB().Where(orgWhere).First(org)
 		if db.Error != nil {
 			// handle wrong reference key error and database error separately
 			if db.RecordNotFound() {
@@ -116,18 +82,73 @@ func (user *User) Create(referenceKey string) *cigExchange.APIError {
 			} else {
 				apiErr = cigExchange.NewDatabaseError("Organization lookup failed", db.Error)
 			}
-			return apiErr
+			return nil, apiErr
 		}
 	}
 
-	err := cigExchange.GetDB().Create(user).Error
-	if err != nil {
-		return cigExchange.NewDatabaseError("Create user call failed", err)
+	contacts := make([]Contact, 0)
+
+	// check that email is unique
+	db := cigExchange.GetDB().Where("value1 = ?", user.LoginEmail.Value1).Find(&contacts)
+	if db.Error != nil {
+		// we expect record not found error here
+		if !db.RecordNotFound() {
+			return nil, cigExchange.NewDatabaseError("Contact lookup failed", db.Error)
+		}
+	} else {
+		unverifiedUsers := make([]*User, 0)
+		for _, contact := range contacts {
+			// handle existing users
+			existingUser := &User{}
+			if cigExchange.GetDB().Model(contact).Related(existingUser, "LoginEmail").Error == nil {
+				if existingUser.Status == UserStatusVerified {
+					// return real user
+
+					// create organisation link for the user if necessary
+					if len(referenceKey) > 0 {
+						// check existing link to organisation
+						_, apiError := GetOrgUserRole(existingUser.ID, org.ID)
+						if apiError != nil {
+							// user don't belong to organisation
+							orgUser := &OrganisationUser{
+								UserID:           existingUser.ID,
+								OrganisationID:   org.ID,
+								IsHome:           false,
+								OrganisationRole: OrganisationRoleUser,
+								Status:           OrganisationUserStatusUnverified,
+							}
+							apiErr := orgUser.Create()
+							if apiErr != nil {
+								return nil, apiErr
+							}
+						}
+					}
+
+					return existingUser, nil
+				}
+				// add to unverified users
+				unverifiedUsers = append(unverifiedUsers, existingUser)
+			}
+		}
+
+		for _, unverifiedUser := range unverifiedUsers {
+			apiError := deleteUnverifiedUser(unverifiedUser)
+			if apiError != nil {
+				return nil, apiError
+			}
+		}
 	}
 
+	// create new user
+	err := cigExchange.GetDB().Create(user).Error
+	if err != nil {
+		return nil, cigExchange.NewDatabaseError("Create user call failed", err)
+	}
+
+	// create user contacts links
 	apiError := createUserContacts(user)
 	if apiError != nil {
-		return apiError
+		return nil, apiError
 	}
 
 	// create organisation link for the user if necessary
@@ -141,11 +162,11 @@ func (user *User) Create(referenceKey string) *cigExchange.APIError {
 		}
 		apiErr := orgUser.Create()
 		if apiErr != nil {
-			return apiErr
+			return nil, apiErr
 		}
 	}
 
-	return nil
+	return user, nil
 }
 
 // Save writes the user object changes into db
@@ -498,6 +519,49 @@ func GetUserByMobile(code, number string) (user *User, apiErr *cigExchange.APIEr
 	}
 
 	return
+}
+
+// GetUserRole returns user role
+func GetUserRole(userUUID string) (role string, apiError *cigExchange.APIError) {
+
+	// check user id
+	if len(userUUID) == 0 {
+		return "", cigExchange.NewInvalidFieldError("user_id", "UserID is invalid")
+	}
+
+	// get user
+	user, apiErr := GetUser(userUUID)
+	if apiErr != nil {
+		return "", apiErr
+	}
+
+	return user.Role, nil
+}
+
+// GetOrgUserRole returns user role in organisation
+func GetOrgUserRole(userUUID, organisationUUID string) (role string, apiError *cigExchange.APIError) {
+
+	// check user id
+	if len(userUUID) == 0 {
+		return "", cigExchange.NewInvalidFieldError("user_id", "UserID is invalid")
+	}
+
+	// check organisation id
+	if len(organisationUUID) == 0 {
+		return "", cigExchange.NewInvalidFieldError("organization_id", "OrganisationID is invalid")
+	}
+
+	// get role in organisation
+	orgUserWhere := &OrganisationUser{
+		OrganisationID: organisationUUID,
+		UserID:         userUUID,
+	}
+	orgUser, apiErr := orgUserWhere.Find()
+	if apiErr != nil {
+		return "", apiErr
+	}
+
+	return orgUser.OrganisationRole, nil
 }
 
 // TrimFieldsAndValidate checks user for invalid fields
