@@ -251,10 +251,11 @@ func GetOrganisationInfo(organisationID string) (*OrganisationInfo, *cigExchange
 
 // OrganisationUserInfo is a struct to store dashboard values
 type OrganisationUserInfo struct {
-	Name     string  `json:"name"`
-	LastName string  `json:"lastname"`
-	UserID   string  `json:"user_id"`
-	Count    float32 `json:"count"`
+	Name        string  `json:"name"`
+	LastName    string  `json:"lastname"`
+	UserID      string  `json:"user_id"`
+	Count       float32 `json:"count"`
+	AverageTime int     `json:"average"`
 }
 
 // GetOrganisationUsersInfo returns values for organisation users dashboard
@@ -262,7 +263,7 @@ func GetOrganisationUsersInfo(organisationID string) ([]*OrganisationUserInfo, *
 
 	organisationUsersInfo := make([]*OrganisationUserInfo, 0)
 
-	selectS := "SELECT \"user\".name, \"user\".lastname, user_id, COUNT (user_id) as count FROM public.user_activity "
+	selectS := "SELECT \"user\".name, \"user\".lastname, user_id, COUNT(user_id) as c, extract(epoch from sum(\"user_activity\".updated_at - \"user_activity\".created_at)) / count(*) as average FROM public.user_activity "
 	joinS := "INNER JOIN public.user ON public.user_activity.user_id = public.user.id "
 	whereS := "WHERE type = 'user_session' and jwt @> '{\"organisation_id\": \"" + organisationID + "\"}' "
 	groupS := "GROUP BY user_id, \"user\".name, \"user\".lastname;"
@@ -273,10 +274,14 @@ func GetOrganisationUsersInfo(organisationID string) ([]*OrganisationUserInfo, *
 	}
 	defer rows.Close()
 	for rows.Next() {
+		var average float64 = 0.0
 		orgUserInfo := &OrganisationUserInfo{}
-		err = rows.Scan(&orgUserInfo.Name, &orgUserInfo.LastName, &orgUserInfo.UserID, &orgUserInfo.Count)
+		err = rows.Scan(&orgUserInfo.Name, &orgUserInfo.LastName, &orgUserInfo.UserID, &orgUserInfo.Count, &average)
 		if err == nil {
+			orgUserInfo.AverageTime = int(average)
 			organisationUsersInfo = append(organisationUsersInfo, orgUserInfo)
+		} else {
+			fmt.Printf("GetOrganisationUsersInfo error: %v\n", err.Error())
 		}
 	}
 
