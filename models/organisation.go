@@ -4,6 +4,7 @@ import (
 	cigExchange "cig-exchange-libs"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -396,6 +397,10 @@ func GetOfferingsClicks(organisationID string) ([]*OrganisationOfferingClicks, *
 		}
 		offeringsClicks = append(offeringsClicks, clicks)
 	}
+
+	sort.Slice(offeringsClicks, func(i, j int) bool {
+		return offeringsClicks[i].Count > offeringsClicks[j].Count
+	})
 
 	return offeringsClicks, nil
 }
