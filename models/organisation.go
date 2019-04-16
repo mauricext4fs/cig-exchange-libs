@@ -27,17 +27,17 @@ const (
 
 // Organisation is a struct to represent an organisation
 type Organisation struct {
-	ID                        string     `json:"id" gorm:"column:id;primary_key"`
-	Type                      string     `json:"type" gorm:"column:type"`
-	Name                      string     `json:"name" gorm:"column:name"`
-	Website                   string     `json:"website" gorm:"column:website"`
-	ReferenceKey              string     `json:"reference_key" gorm:"column:reference_key"`
-	OfferingRatingDescription string     `json:"offering_rating_description" gorm:"column:offering_rating_description"`
-	Status                    string     `json:"status" gorm:"column:status;default:'unverified'"`
-	Verified                  int64      `json:"-" gorm:"column:verified"`
-	CreatedAt                 time.Time  `json:"created_at" gorm:"column:created_at"`
-	UpdatedAt                 time.Time  `json:"updated_at" gorm:"column:updated_at"`
-	DeletedAt                 *time.Time `json:"-" gorm:"column:deleted_at"`
+	ID                        string         `json:"id" gorm:"column:id;primary_key"`
+	Type                      string         `json:"type" gorm:"column:type"`
+	Name                      string         `json:"name" gorm:"column:name"`
+	Website                   string         `json:"website" gorm:"column:website"`
+	ReferenceKey              string         `json:"reference_key" gorm:"column:reference_key"`
+	OfferingRatingDescription postgres.Jsonb `json:"offering_rating_description" gorm:"column:offering_rating_description"`
+	Status                    string         `json:"status" gorm:"column:status;default:'unverified'"`
+	Verified                  int64          `json:"-" gorm:"column:verified"`
+	CreatedAt                 time.Time      `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt                 time.Time      `json:"updated_at" gorm:"column:updated_at"`
+	DeletedAt                 *time.Time     `json:"-" gorm:"column:deleted_at"`
 }
 
 // TableName returns table name for struct
@@ -55,6 +55,12 @@ func (*Organisation) BeforeCreate(scope *gorm.Scope) error {
 	scope.SetColumn("ID", UUID.String())
 
 	return nil
+}
+
+// GetMultilangFields returns jsonb fields
+func (*Organisation) GetMultilangFields() []string {
+
+	return []string{"offering_rating_description"}
 }
 
 // Create inserts new organisation object into db
@@ -189,7 +195,6 @@ func (organisation *Organisation) trimFieldsAndValidate() *cigExchange.APIError 
 	organisation.Name = strings.TrimSpace(organisation.Name)
 	organisation.Type = strings.TrimSpace(organisation.Type)
 	organisation.ReferenceKey = strings.TrimSpace(organisation.ReferenceKey)
-	organisation.OfferingRatingDescription = strings.TrimSpace(organisation.OfferingRatingDescription)
 
 	missingFieldNames := make([]string, 0)
 	if len(organisation.Name) == 0 {
@@ -274,7 +279,7 @@ func GetOrganisationUsersInfo(organisationID string) ([]*OrganisationUserInfo, *
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var average float64 = 0.0
+		var average float64
 		orgUserInfo := &OrganisationUserInfo{}
 		err = rows.Scan(&orgUserInfo.Name, &orgUserInfo.LastName, &orgUserInfo.UserID, &orgUserInfo.Count, &average)
 		if err == nil {

@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"sort"
 
+	"github.com/jinzhu/gorm/dialects/postgres"
 	"github.com/mattbaird/gochimp"
 )
 
@@ -108,6 +109,85 @@ func FilterUnknownFields(model interface{}, fields []string, d map[string]interf
 	}
 
 	return result
+}
+
+// MultilangModel interface for all multilang models
+type MultilangModel interface {
+	GetMultilangFields() []string
+}
+
+// PrepareResponseForMultilangModel converts model to map with all multilang fields as jsonb
+func PrepareResponseForMultilangModel(model MultilangModel) (map[string]interface{}, *APIError) {
+
+	modelMap := make(map[string]interface{})
+	// marshal to json
+	modelBytes, err := json.Marshal(model)
+	if err != nil {
+		return modelMap, NewJSONEncodingError(err)
+	}
+
+	// fill map
+	err = json.Unmarshal(modelBytes, &modelMap)
+	if err != nil {
+		return modelMap, NewJSONDecodingError(err)
+	}
+
+	// handle multilanguage text
+	for _, name := range model.GetMultilangFields() {
+		val, ok := modelMap[name]
+		if !ok {
+			continue
+		}
+		// move jsonb to name_map field
+		modelMap[name+"_map"] = val
+		// search for 'en' in jsonb
+		modelMap[name] = ""
+		if val != nil {
+			mapLang, ok := val.(map[string]interface{})
+			if ok {
+				if v, ok := mapLang["en"]; ok {
+					modelMap[name] = v
+				} else if v, ok := mapLang["fr"]; ok {
+					modelMap[name] = v
+				} else if v, ok := mapLang["it"]; ok {
+					modelMap[name] = v
+				} else if v, ok := mapLang["de"]; ok {
+					modelMap[name] = v
+				}
+			}
+		}
+	}
+
+	return modelMap, nil
+}
+
+// ConvertRequestMapToJSONB replaces multilang string to jsonb if needed
+func ConvertRequestMapToJSONB(offeringMap *map[string]interface{}, model MultilangModel) *APIError {
+
+	localMap := *offeringMap
+
+	for _, name := range model.GetMultilangFields() {
+		val, ok := localMap[name]
+		if !ok {
+			continue
+		}
+		switch v := val.(type) {
+		case string:
+			strVal := `{"en":"` + v + `"}`
+			metadata := json.RawMessage(strVal)
+			localMap[name] = postgres.Jsonb{RawMessage: metadata}
+		case int32, int64:
+			return NewInvalidFieldError(name, "Field '"+name+"' has invalid type")
+		default:
+			mapB, err := json.Marshal(v)
+			if err != nil {
+				return NewJSONEncodingError(err)
+			}
+			metadata := json.RawMessage(mapB)
+			localMap[name] = postgres.Jsonb{RawMessage: metadata}
+		}
+	}
+	return nil
 }
 
 type emailType int
