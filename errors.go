@@ -135,6 +135,16 @@ func (e *APIError) ToString() string {
 
 // Helper functions for creating specific errors
 
+// NewInternalServerError creates APIError with ErrorTypeInternalServer
+func NewInternalServerError(reason, message string) *APIError {
+	apiErr := &APIError{}
+	apiErr.SetErrorType(ErrorTypeInternalServer)
+
+	apiErr.NewNestedError(reason, message)
+
+	return apiErr
+}
+
 // NewDatabaseError creates APIError with ErrorTypeInternalServer
 // and nested error with ReasonDatabaseFailure reason
 func NewDatabaseError(message string, err error) *APIError {

@@ -239,17 +239,17 @@ func GetOrganisationInfo(organisationID string) (*OrganisationInfo, *cigExchange
 	organisationInfo.TotalUsers = count
 
 	// get
-	row := cigExchange.GetDB().Model(&Offering{}).Select("sum(amount), sum(remaining)").Where("organisation_id = ?", organisationID).Row()
+	row := cigExchange.GetDB().Model(&Offering{}).Select("sum(amount), sum(amount_already_taken)").Where("organisation_id = ?", organisationID).Row()
 
 	var amount float32
-	var remaining float32
-	err := row.Scan(&amount, &remaining)
+	var taken float32
+	err := row.Scan(&amount, &taken)
 	if err != nil {
 		fmt.Println(cigExchange.NewDatabaseError("Get total and remaininig amount for organisation failed", err).ToString())
 		return organisationInfo, nil
 	}
 	organisationInfo.TotalAmount = amount
-	organisationInfo.RemainingAmount = remaining
+	organisationInfo.RemainingAmount = amount - taken
 
 	return organisationInfo, nil
 }

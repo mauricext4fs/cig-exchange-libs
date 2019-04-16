@@ -20,7 +20,7 @@ type Offering struct {
 	Rating                 postgres.Jsonb `json:"rating" gorm:"column:rating"`
 	Slug                   postgres.Jsonb `json:"slug" gorm:"column:slug"`
 	Amount                 *float64       `json:"amount" gorm:"column:amount"`
-	Remaining              float64        `json:"remaining" gorm:"column:remaining"`
+	Remaining              float64        `json:"remaining" gorm:"-"`
 	Interest               *float64       `json:"interest" gorm:"column:interest"`
 	Period                 *int64         `json:"period" gorm:"column:period"`
 	Origin                 postgres.Jsonb `json:"origin" gorm:"column:origin"`
@@ -124,6 +124,11 @@ func (offering *Offering) Validate() *cigExchange.APIError {
 		return cigExchange.NewRequiredFieldError(missingFieldNames)
 	}
 
+	apiErr := offering.checkRemaining()
+	if apiErr != nil {
+		return apiErr
+	}
+
 	// check that organisation UUID is valid
 	organization := &Organisation{}
 	db := cigExchange.GetDB().Where(&Organisation{ID: offering.OrganisationID}).First(&organization)
@@ -153,11 +158,19 @@ func (offering *Offering) Create() *cigExchange.APIError {
 	if db.Error != nil {
 		return cigExchange.NewDatabaseError("Create offering failed", db.Error)
 	}
+
+	offering.calculateRemaining()
+
 	return nil
 }
 
 // Update existing offering object in db
 func (offering *Offering) Update(update map[string]interface{}) *cigExchange.APIError {
+
+	apiErr := offering.checkRemaining()
+	if apiErr != nil {
+		return apiErr
+	}
 
 	// check that UUID is set
 	if _, ok := update["id"]; !ok || len(offering.ID) == 0 {
@@ -168,6 +181,7 @@ func (offering *Offering) Update(update map[string]interface{}) *cigExchange.API
 	if db.Error != nil {
 		return cigExchange.NewDatabaseError("Failed to update offering", db.Error)
 	}
+
 	return nil
 }
 
@@ -203,6 +217,9 @@ func GetOffering(UUID string) (*Offering, *cigExchange.APIError) {
 		return nil, cigExchange.NewDatabaseError("Fetch offering failed", db.Error)
 	}
 
+	// fill 'remaining' field
+	offering.calculateRemaining()
+
 	return offering, nil
 }
 
@@ -215,6 +232,11 @@ func GetOfferings() ([]*Offering, *cigExchange.APIError) {
 		if !db.RecordNotFound() {
 			return offerings, cigExchange.NewDatabaseError("Fetch all offerings failed", db.Error)
 		}
+	}
+
+	// fill 'remaining' field
+	for _, offering := range offerings {
+		offering.calculateRemaining()
 	}
 
 	return offerings, nil
@@ -230,5 +252,43 @@ func GetOrganisationOfferings(organisationID string) ([]*Offering, *cigExchange.
 			return offerings, cigExchange.NewDatabaseError("Fetch offerings failed", db.Error)
 		}
 	}
+
+	// fill 'remaining' field
+	for _, offering := range offerings {
+		offering.calculateRemaining()
+	}
+
 	return offerings, nil
+}
+
+func (offering *Offering) checkRemaining() *cigExchange.APIError {
+
+	if offering.Amount == nil {
+		offering.Amount = new(float64)
+	}
+	if offering.AmountAlreadyTaken == nil {
+		offering.AmountAlreadyTaken = new(float64)
+	}
+	if *offering.AmountAlreadyTaken > *offering.Amount {
+		return cigExchange.NewInvalidFieldError("amount, amount_already_taken", "'amount_already_taken' can't be bigger than 'amount'")
+	}
+	return nil
+}
+
+func (offering *Offering) calculateRemaining() {
+
+	// convert nil value to 0
+	if offering.AmountAlreadyTaken == nil {
+		offering.AmountAlreadyTaken = new(float64)
+	}
+	if offering.Amount == nil {
+		offering.Amount = new(float64)
+	}
+
+	offering.Remaining = *offering.Amount - *offering.AmountAlreadyTaken
+
+	// check for negative 'remaining' value
+	if offering.Remaining < 0 {
+		offering.Remaining = 0
+	}
 }
