@@ -18,14 +18,14 @@ const (
 // Constants defining the user role
 const (
 	UserRoleAdmin = "admin"
-	UserRoleUser  = "user"
+	UserRoleUser  = "regular-p2p-user"
 )
 
 // User is a struct to represent a user
 type User struct {
 	ID             string     `json:"id" gorm:"column:id;primary_key"`
 	Sex            string     `json:"sex" gorm:"column:sex"`
-	Role           string     `json:"-" gorm:"column:role"`
+	Role           string     `json:"-" gorm:"column:role;default:'regular-p2p-user'"`
 	Name           string     `json:"name" gorm:"column:name"`
 	LastName       string     `json:"lastname" gorm:"column:lastname"`
 	LoginEmail     *Contact   `json:"-" gorm:"foreignkey:LoginEmailUUID;association_foreignkey:ID"`
