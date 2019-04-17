@@ -2,6 +2,7 @@ package models
 
 import (
 	cigExchange "cig-exchange-libs"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -238,7 +239,7 @@ func GetOrganisationInfo(organisationID string) (*OrganisationInfo, *cigExchange
 	}
 	organisationInfo.TotalUsers = count
 
-	// get
+	// get offerings amount and amount already taken
 	row := cigExchange.GetDB().Model(&Offering{}).Select("sum(amount), sum(amount_already_taken)").Where("organisation_id = ?", organisationID).Row()
 
 	var amount float32
@@ -549,10 +550,17 @@ func GetOrganisationUsersForOrganisation(organisationID string) (orgUsers []*Org
 	return
 }
 
-// GetUsersForOrganisation queries all users for organisation from db
-func GetUsersForOrganisation(organisationID string, invitedUsers bool) (users []*User, apiErr *cigExchange.APIError) {
+// OrganisationUserResponse used in response for organisation/{organisation_id}/users api call
+type OrganisationUserResponse struct {
+	*User
+	UserEmail string     `json:"email"`
+	LastLogin *time.Time `json:"last_login,omitempty"`
+}
 
-	users = make([]*User, 0)
+// GetUsersForOrganisation queries all users for organisation from db
+func GetUsersForOrganisation(organisationID string, invitedUsers bool) (usersResponse []*OrganisationUserResponse, apiErr *cigExchange.APIError) {
+
+	usersResponse = make([]*OrganisationUserResponse, 0)
 	var orgUsers []OrganisationUser
 
 	// find all organisationUser objects for organisation
@@ -566,16 +574,19 @@ func GetUsersForOrganisation(organisationID string, invitedUsers bool) (users []
 
 	for _, orgUser := range orgUsers {
 		if invitedUsers {
+			// return only list of invited users
 			if orgUser.Status != OrganisationUserStatusInvited {
 				continue
 			}
 		} else {
+			// return only list of active users
 			if orgUser.Status != OrganisationUserStatusActive {
 				continue
 			}
 		}
+		// get user with login email
 		var user User
-		db = cigExchange.GetDB().Where(&User{ID: orgUser.UserID}).First(&user)
+		db = cigExchange.GetDB().Preload("LoginEmail").Where(&User{ID: orgUser.UserID}).First(&user)
 		if db.Error != nil {
 			if db.RecordNotFound() {
 				continue
@@ -583,9 +594,32 @@ func GetUsersForOrganisation(organisationID string, invitedUsers bool) (users []
 			apiErr = cigExchange.NewDatabaseError("User lookup failed", db.Error)
 			return
 		}
+		if user.LoginEmail == nil || len(user.LoginEmail.Value1) == 0 {
+			apiErr = cigExchange.NewDatabaseError("Invalid login email", db.Error)
+			return
+		}
 
+		var lastLogin time.Time
+
+		// get last login for user
+		row := cigExchange.GetDB().Model(&UserActivity{}).Select("updated_at").Where("user_id = ? and type = ?", user.ID, ActivityTypeSessionLength).Row()
+
+		err := row.Scan(&lastLogin)
+		if err != nil {
+			if err != sql.ErrNoRows {
+				fmt.Println(cigExchange.NewDatabaseError("Last login error: ", err).ToString())
+				return
+			}
+		}
+		var lastLoginP *time.Time
+		if !lastLogin.IsZero() {
+			lastLoginP = &lastLogin
+		}
+
+		// fill response struct
+		userResponse := &OrganisationUserResponse{&user, user.LoginEmail.Value1, lastLoginP}
 		// add user to response
-		users = append(users, &user)
+		usersResponse = append(usersResponse, userResponse)
 	}
 
 	return
