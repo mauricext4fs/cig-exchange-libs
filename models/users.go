@@ -56,6 +56,12 @@ func (user *User) BeforeCreate(scope *gorm.Scope) error {
 	return nil
 }
 
+// GetMultilangFields returns jsonb fields
+func (*User) GetMultilangFields() []string {
+
+	return []string{}
+}
+
 // CreateUser inserts new user object into db
 func CreateUser(user *User, referenceKey string) (*User, *cigExchange.APIError) {
 

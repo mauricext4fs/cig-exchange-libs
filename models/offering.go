@@ -87,15 +87,8 @@ func (offering *Offering) Validate() *cigExchange.APIError {
 		return cigExchange.NewJSONDecodingError(err)
 	}
 
-	type Langs struct {
-		En string `json:"en"`
-		Fr string `json:"fr"`
-		It string `json:"it"`
-		De string `json:"de"`
-	}
-
 	// check that all languages present
-	var langsObject Langs
+	var langsObject cigExchange.MultilangString
 	if err := json.Unmarshal(value, &langsObject); err != nil {
 		return cigExchange.NewJSONDecodingError(err)
 	}
