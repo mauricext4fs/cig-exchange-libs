@@ -63,7 +63,7 @@ type infoResponse struct {
 
 // UserRequest is a structure to represent the signup api request
 type UserRequest struct {
-	Sex              string `json:"sex"`
+	Title            string `json:"title"`
 	Name             string `json:"name"`
 	LastName         string `json:"lastname"`
 	Email            string `json:"email"`
@@ -77,7 +77,7 @@ type UserRequest struct {
 func (user *UserRequest) ConvertRequestToUser() *models.User {
 	mUser := &models.User{}
 
-	mUser.Sex = user.Sex
+	mUser.Title = user.Title
 	mUser.Role = models.UserRoleUser
 	mUser.Name = user.Name
 	mUser.LastName = user.LastName
@@ -89,7 +89,7 @@ func (user *UserRequest) ConvertRequestToUser() *models.User {
 }
 
 type organisationRequest struct {
-	Sex              string `json:"sex"`
+	Title            string `json:"title"`
 	Name             string `json:"name"`
 	LastName         string `json:"lastname"`
 	Email            string `json:"email"`
@@ -102,7 +102,7 @@ type organisationRequest struct {
 func (request *organisationRequest) convertRequestToUserAndOrganisation() (*models.User, *models.Organisation) {
 	mUser := &models.User{}
 
-	mUser.Sex = request.Sex
+	mUser.Title = request.Title
 	mUser.Role = models.UserRoleUser
 	mUser.Name = request.Name
 	mUser.LastName = request.LastName
