@@ -77,8 +77,13 @@ func PrintAPIError(apiErrorP **APIError) {
 	}
 }
 
+// MultilangModel interface for all multilang models
+type MultilangModel interface {
+	GetMultilangFields() []string
+}
+
 // FilterUnknownFields prepares map[string]interface{} for gorm Update
-func FilterUnknownFields(model interface{}, fields []string, d map[string]interface{}) map[string]interface{} {
+func FilterUnknownFields(model MultilangModel, d map[string]interface{}) map[string]interface{} {
 
 	result := make(map[string]interface{})
 
@@ -86,6 +91,11 @@ func FilterUnknownFields(model interface{}, fields []string, d map[string]interf
 
 	s := reflect.ValueOf(model).Elem()
 	typeOfP := s.Type()
+
+	// get multilang fields and sort for search
+	fields := model.GetMultilangFields()
+	sort.Strings(fields)
+
 	// iterate fields
 	for i := 0; i < s.NumField(); i++ {
 		for jsonName, value := range d {
@@ -98,8 +108,7 @@ func FilterUnknownFields(model interface{}, fields []string, d map[string]interf
 			if typeOfP.Field(i).Tag.Get("json") == jsonName {
 				result[jsonName] = value
 			} else {
-				// don't filter keys from 'fields'
-				sort.Strings(fields)
+				// keep multilang fields
 				i := sort.SearchStrings(fields, jsonName)
 				if i < len(fields) && fields[i] == jsonName {
 					result[jsonName] = value
@@ -111,9 +120,12 @@ func FilterUnknownFields(model interface{}, fields []string, d map[string]interf
 	return result
 }
 
-// MultilangModel interface for all multilang models
-type MultilangModel interface {
-	GetMultilangFields() []string
+// MultilangString contains multilanguage string
+type MultilangString struct {
+	En string `json:"en"`
+	It string `json:"it"`
+	Fr string `json:"fr"`
+	De string `json:"de"`
 }
 
 // PrepareResponseForMultilangModel converts model to map with all multilang fields as jsonb
@@ -134,28 +146,25 @@ func PrepareResponseForMultilangModel(model MultilangModel) (map[string]interfac
 
 	// handle multilanguage text
 	for _, name := range model.GetMultilangFields() {
+
+		// prepare default value
+		mString := MultilangString{}
+
 		val, ok := modelMap[name]
-		if !ok {
-			continue
-		}
-		// move jsonb to name_map field
-		modelMap[name+"_map"] = val
-		// search for 'en' in jsonb
-		modelMap[name] = ""
-		if val != nil {
-			mapLang, ok := val.(map[string]interface{})
-			if ok {
-				if v, ok := mapLang["en"]; ok {
-					modelMap[name] = v
-				} else if v, ok := mapLang["fr"]; ok {
-					modelMap[name] = v
-				} else if v, ok := mapLang["it"]; ok {
-					modelMap[name] = v
-				} else if v, ok := mapLang["de"]; ok {
-					modelMap[name] = v
-				}
+		if ok {
+			// convert interface to struct and filter unknown fields
+			valBytes, err := json.Marshal(val)
+			if err != nil {
+				return modelMap, NewJSONDecodingError(err)
+			}
+
+			if err := json.Unmarshal(valBytes, &mString); err != nil {
+				return modelMap, NewJSONDecodingError(err)
 			}
 		}
+
+		modelMap[name+"_map"] = mString
+		modelMap[name] = mString.En
 	}
 
 	return modelMap, nil
