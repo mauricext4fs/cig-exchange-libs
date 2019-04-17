@@ -24,7 +24,7 @@ const (
 // User is a struct to represent a user
 type User struct {
 	ID             string     `json:"id" gorm:"column:id;primary_key"`
-	Sex            string     `json:"sex" gorm:"column:sex"`
+	Title          string     `json:"title" gorm:"column:title"`
 	Role           string     `json:"-" gorm:"column:role;default:'regular-p2p-user'"`
 	Name           string     `json:"name" gorm:"column:name"`
 	LastName       string     `json:"lastname" gorm:"column:lastname"`
