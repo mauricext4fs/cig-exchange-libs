@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"time"
@@ -623,4 +624,16 @@ func GetUsersForOrganisation(organisationID string, invitedUsers bool) (usersRes
 	}
 
 	return
+}
+
+// DeleteExpiredInvitations deletes expired invitations
+func DeleteExpiredInvitations() {
+
+	// delete invited user with updated_at < now() - interval '30 days'
+	db := cigExchange.GetDB().Where("status = ? and updated_at < now() - interval '30 days'", OrganisationUserStatusInvited).Delete(&OrganisationUser{})
+	if db.Error != nil {
+		log.Printf("Failed to delete invited users with error: %v\n", db.Error.Error())
+		return
+	}
+	log.Printf("%d invitations deleted\n", db.RowsAffected)
 }
