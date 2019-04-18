@@ -205,10 +205,11 @@ type emailType int
 const (
 	EmailTypeWelcome emailType = iota
 	EmailTypePinCode
+	EmailTypeInvitation
 )
 
 // SendEmail sends template emails
-func SendEmail(eType emailType, email, pinCode string) error {
+func SendEmail(eType emailType, email string, parameters map[string]string) error {
 
 	mandrillClient := GetMandrill()
 
@@ -223,13 +224,19 @@ func SendEmail(eType emailType, email, pinCode string) error {
 	case EmailTypePinCode:
 		templateName = "pin-code"
 		subject = "CIG Exchange Verification Code"
-		mVar := gochimp.Var{
-			Name:    "pincode",
-			Content: pinCode,
-		}
-		mergeVars = append(mergeVars, mVar)
+	case EmailTypeInvitation:
+		templateName = "invitation"
+		subject = "CIG Exchange Invitation"
 	default:
 		return fmt.Errorf("Unsupported email type: %v", eType)
+	}
+
+	for key, value := range parameters {
+		mVar := gochimp.Var{
+			Name:    key,
+			Content: value,
+		}
+		mergeVars = append(mergeVars, mVar)
 	}
 
 	// TemplateRender sometimes returns zero length string without giving any error (wtf???)

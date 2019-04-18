@@ -113,3 +113,13 @@ func GetMandrill() *gochimp.MandrillAPI {
 func IsDevEnv() bool {
 	return isDevEnvironment
 }
+
+// GetServerURL return Dev or Prod urls.
+// TODO: Need to add staging and prod local urls
+func GetServerURL() string {
+
+	if IsDevEnv() {
+		return "http://dev.cig-exchange.ch:8228"
+	}
+	return "https://www.cig-exchange.ch"
+}

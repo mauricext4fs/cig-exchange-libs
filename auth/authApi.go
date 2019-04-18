@@ -306,7 +306,8 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 
 	// send welcome email async
 	go func() {
-		err = cigExchange.SendEmail(cigExchange.EmailTypeWelcome, userReq.Email, "")
+		parameters := map[string]string{}
+		err = cigExchange.SendEmail(cigExchange.EmailTypeWelcome, userReq.Email, parameters)
 		if err != nil {
 			fmt.Println("CreateUser: email sending error:")
 			fmt.Println(err.Error())
@@ -507,7 +508,8 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 
 	// send welcome email async
 	go func() {
-		err = cigExchange.SendEmail(cigExchange.EmailTypeWelcome, orgRequest.Email, "")
+		parameters := map[string]string{}
+		err = cigExchange.SendEmail(cigExchange.EmailTypeWelcome, orgRequest.Email, parameters)
 		if err != nil {
 			fmt.Println("CreateOrganisation: email sending error:")
 			fmt.Println(err.Error())
@@ -632,7 +634,10 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 		}
 		// process the send OTP async so that client won't see any delays
 		go func() {
-			err = cigExchange.SendEmail(cigExchange.EmailTypePinCode, user.LoginEmail.Value1, code)
+			parameters := map[string]string{
+				"pincode": code,
+			}
+			err = cigExchange.SendEmail(cigExchange.EmailTypePinCode, user.LoginEmail.Value1, parameters)
 			if err != nil {
 				fmt.Println("SendCode: email sending error:")
 				fmt.Println(err.Error())
