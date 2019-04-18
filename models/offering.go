@@ -17,13 +17,13 @@ type Offering struct {
 	Title                  postgres.Jsonb `json:"title" gorm:"column:title"`
 	Type                   pq.StringArray `json:"type" gorm:"column:type"`
 	Description            postgres.Jsonb `json:"description" gorm:"column:description"`
-	Rating                 postgres.Jsonb `json:"rating" gorm:"column:rating"`
-	Slug                   postgres.Jsonb `json:"slug" gorm:"column:slug"`
+	Rating                 *string        `json:"rating" gorm:"column:rating"`
+	Slug                   *string        `json:"slug" gorm:"column:slug"`
 	Amount                 *float64       `json:"amount" gorm:"column:amount"`
 	Remaining              float64        `json:"remaining" gorm:"-"`
 	Interest               *float64       `json:"interest" gorm:"column:interest"`
 	Period                 *int64         `json:"period" gorm:"column:period"`
-	Origin                 postgres.Jsonb `json:"origin" gorm:"column:origin"`
+	Origin                 string         `json:"origin" gorm:"column:origin"`
 	Map                    postgres.Jsonb `json:"map" gorm:"column:map"`
 	Location               postgres.Jsonb `json:"location" gorm:"column:location"`
 	Tagline1               postgres.Jsonb `json:"tagline1" gorm:"column:tagline1"`
@@ -67,7 +67,7 @@ func (*Offering) BeforeCreate(scope *gorm.Scope) error {
 // GetMultilangFields returns jsonb fields
 func (offering *Offering) GetMultilangFields() []string {
 
-	return []string{"title", "slug", "origin", "description", "location", "tagline1", "tagline2", "tagline3", "current_debt_level", "rating"}
+	return []string{"title", "description", "location", "tagline1", "tagline2", "tagline3", "current_debt_level"}
 }
 
 // Validate checks that:
@@ -106,7 +106,7 @@ func (offering *Offering) Validate() *cigExchange.APIError {
 	if len(langsObject.De) == 0 {
 		missingFieldNames = append(missingFieldNames, "offering_direct_url.de")
 	}
-	if len(offering.Origin.RawMessage) == 0 {
+	if len(offering.Origin) == 0 {
 		missingFieldNames = append(missingFieldNames, "origin")
 	}
 	if len(offering.Title.RawMessage) == 0 {
