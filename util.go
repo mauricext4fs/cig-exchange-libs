@@ -135,13 +135,13 @@ func PrepareResponseForMultilangModel(model MultilangModel) (map[string]interfac
 	// marshal to json
 	modelBytes, err := json.Marshal(model)
 	if err != nil {
-		return modelMap, NewJSONEncodingError(err)
+		return modelMap, NewJSONEncodingError(MessageResponseJSONEncoding, err)
 	}
 
 	// fill map
 	err = json.Unmarshal(modelBytes, &modelMap)
 	if err != nil {
-		return modelMap, NewJSONDecodingError(err)
+		return modelMap, NewJSONDecodingError(MessageResponseJSONEncoding, err)
 	}
 
 	// handle multilanguage text
@@ -155,11 +155,11 @@ func PrepareResponseForMultilangModel(model MultilangModel) (map[string]interfac
 			// convert interface to struct and filter unknown fields
 			valBytes, err := json.Marshal(val)
 			if err != nil {
-				return modelMap, NewJSONDecodingError(err)
+				return modelMap, NewJSONDecodingError(MessageResponseJSONEncoding, err)
 			}
 
 			if err := json.Unmarshal(valBytes, &mString); err != nil {
-				return modelMap, NewJSONDecodingError(err)
+				return modelMap, NewJSONDecodingError(MessageResponseJSONEncoding, err)
 			}
 		}
 
@@ -171,9 +171,9 @@ func PrepareResponseForMultilangModel(model MultilangModel) (map[string]interfac
 }
 
 // ConvertRequestMapToJSONB replaces multilang string to jsonb if needed
-func ConvertRequestMapToJSONB(offeringMap *map[string]interface{}, model MultilangModel) *APIError {
+func ConvertRequestMapToJSONB(modelMap *map[string]interface{}, model MultilangModel) *APIError {
 
-	localMap := *offeringMap
+	localMap := *modelMap
 
 	for _, name := range model.GetMultilangFields() {
 		val, ok := localMap[name]
@@ -190,7 +190,7 @@ func ConvertRequestMapToJSONB(offeringMap *map[string]interface{}, model Multila
 		default:
 			mapB, err := json.Marshal(v)
 			if err != nil {
-				return NewJSONEncodingError(err)
+				return NewJSONEncodingError(MessageRequestJSONDecoding, err)
 			}
 			metadata := json.RawMessage(mapB)
 			localMap[name] = postgres.Jsonb{RawMessage: metadata}

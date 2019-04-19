@@ -44,6 +44,13 @@ const (
 	ReasonRoutingFailure              = "Routing error"
 )
 
+// nested API Error messages
+const (
+	MessageResponseJSONEncoding = "Response JSON encoding failed"
+	MessageRequestJSONDecoding  = "Request JSON parsing failed"
+	MessageJSONEncoding         = "JSON encoding failed"
+)
+
 // APIError is a custom error type that gets reported to the client
 // conforms to https://github.com/gocardless/http-api-design
 type APIError struct {
@@ -288,11 +295,11 @@ func NewInvalidFieldError(fieldName, message string) *APIError {
 
 // NewJSONDecodingError creates APIError with ErrorTypeBadRequest
 // and nested error with NestedErrorJSONFailure reason
-func NewJSONDecodingError(err error) *APIError {
+func NewJSONDecodingError(message string, err error) *APIError {
 	apiErr := &APIError{}
 	apiErr.SetErrorType(ErrorTypeBadRequest)
 
-	nesetedError := apiErr.NewNestedError(ReasonJSONFailure, "Request body decoding failed")
+	nesetedError := apiErr.NewNestedError(ReasonJSONFailure, message)
 	nesetedError.OriginalError = err
 	return apiErr
 }
@@ -310,11 +317,22 @@ func NewLanguagesJSONDecodingError(err error) *APIError {
 
 // NewJSONEncodingError creates APIError with ErrorTypeBadRequest
 // and nested error with NestedErrorJSONFailure reason
-func NewJSONEncodingError(err error) *APIError {
+func NewJSONEncodingError(message string, err error) *APIError {
 	apiErr := &APIError{}
 	apiErr.SetErrorType(ErrorTypeBadRequest)
 
-	nesetedError := apiErr.NewNestedError(ReasonJSONFailure, "JWT encoding failed")
+	nesetedError := apiErr.NewNestedError(ReasonJSONFailure, message)
+	nesetedError.OriginalError = err
+	return apiErr
+}
+
+// NewRequestDecodingError creates APIError with ErrorTypeBadRequest
+// and nested error with NestedErrorJSONFailure reason
+func NewRequestDecodingError(err error) *APIError {
+	apiErr := &APIError{}
+	apiErr.SetErrorType(ErrorTypeBadRequest)
+
+	nesetedError := apiErr.NewNestedError(ReasonJSONFailure, MessageRequestJSONDecoding)
 	nesetedError.OriginalError = err
 	return apiErr
 }
