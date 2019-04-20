@@ -264,7 +264,7 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 	// decode user object from request body
 	err := json.NewDecoder(r.Body).Decode(userReq)
 	if err != nil {
-		*apiErrorP = cigExchange.NewJSONDecodingError(err)
+		*apiErrorP = cigExchange.NewRequestDecodingError(err)
 		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
@@ -330,7 +330,7 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 	// decode organisation request object from request body
 	err := json.NewDecoder(r.Body).Decode(orgRequest)
 	if err != nil {
-		*apiErrorP = cigExchange.NewJSONDecodingError(err)
+		*apiErrorP = cigExchange.NewRequestDecodingError(err)
 		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
@@ -535,7 +535,7 @@ func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	// decode user object from request body
 	err := json.NewDecoder(r.Body).Decode(userReq)
 	if err != nil {
-		*apiErrorP = cigExchange.NewJSONDecodingError(err)
+		*apiErrorP = cigExchange.NewRequestDecodingError(err)
 		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
@@ -576,7 +576,7 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 	// decode verificationCodeRequest object from request body
 	err := json.NewDecoder(r.Body).Decode(reqStruct)
 	if err != nil {
-		*apiErrorP = cigExchange.NewJSONDecodingError(err)
+		*apiErrorP = cigExchange.NewRequestDecodingError(err)
 		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
@@ -677,7 +677,7 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	// decode verificationCodeRequest object from request body
 	err := json.NewDecoder(r.Body).Decode(reqStruct)
 	if err != nil {
-		*apiErrorP = cigExchange.NewJSONDecodingError(err)
+		*apiErrorP = cigExchange.NewRequestDecodingError(err)
 		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
@@ -1088,7 +1088,7 @@ func convertToUserActivity(loggedInUserP **LoggedInUser, apiErrorP **cigExchange
 		activity.UserID = loggedInUser.UserUUID
 		jsonBytes, err := json.Marshal(loggedInUser)
 		if err != nil {
-			apiErr := cigExchange.NewJSONEncodingError(err)
+			apiErr := cigExchange.NewJSONEncodingError(cigExchange.MessageJSONEncoding, err)
 			return activity, apiErr
 		}
 
@@ -1099,7 +1099,7 @@ func convertToUserActivity(loggedInUserP **LoggedInUser, apiErrorP **cigExchange
 	if apiError != nil {
 		jsonBytes, err := json.Marshal(apiError)
 		if err != nil {
-			apiErr := cigExchange.NewJSONEncodingError(err)
+			apiErr := cigExchange.NewJSONEncodingError(cigExchange.MessageJSONEncoding, err)
 			return activity, apiErr
 		}
 		jsonStr := string(jsonBytes)
@@ -1147,7 +1147,7 @@ func CreateCustomUserActivity(loggedInUserP **LoggedInUser, info map[string]inte
 		activity.UserID = loggedInUser.UserUUID
 		jsonBytes, err := json.Marshal(loggedInUser)
 		if err != nil {
-			apiErr := cigExchange.NewJSONEncodingError(err)
+			apiErr := cigExchange.NewJSONEncodingError(cigExchange.MessageJSONEncoding, err)
 			fmt.Println(apiErr.ToString())
 			return apiErr
 		}
@@ -1158,7 +1158,7 @@ func CreateCustomUserActivity(loggedInUserP **LoggedInUser, info map[string]inte
 	// add info to user activity
 	jsonBytes, err := json.Marshal(info)
 	if err != nil {
-		apiErr := cigExchange.NewJSONEncodingError(err)
+		apiErr := cigExchange.NewJSONEncodingError(cigExchange.MessageJSONEncoding, err)
 		fmt.Println(apiErr.ToString())
 		return apiErr
 	}

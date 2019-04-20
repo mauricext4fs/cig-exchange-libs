@@ -360,13 +360,13 @@ func GetOfferingsClicks(organisationID string) ([]*OrganisationOfferingClicks, *
 		// marshal to json
 		offeringBytes, err := json.Marshal(offering)
 		if err != nil {
-			return offeringsClicks, cigExchange.NewJSONEncodingError(err)
+			return offeringsClicks, cigExchange.NewJSONEncodingError(cigExchange.MessageResponseJSONEncoding, err)
 		}
 
 		// fill map
 		err = json.Unmarshal(offeringBytes, &offeringMap)
 		if err != nil {
-			return offeringsClicks, cigExchange.NewJSONDecodingError(err)
+			return offeringsClicks, cigExchange.NewJSONDecodingError(cigExchange.MessageResponseJSONEncoding, err)
 		}
 
 		val, ok := offeringMap["title"]

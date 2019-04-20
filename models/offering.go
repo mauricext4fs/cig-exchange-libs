@@ -84,13 +84,13 @@ func (offering *Offering) Validate() *cigExchange.APIError {
 	}
 	value, err := offering.OfferingDirectURL.MarshalJSON()
 	if err != nil {
-		return cigExchange.NewJSONDecodingError(err)
+		return cigExchange.NewRequestDecodingError(err)
 	}
 
 	// check that all languages present
 	var langsObject cigExchange.MultilangString
 	if err := json.Unmarshal(value, &langsObject); err != nil {
-		return cigExchange.NewJSONDecodingError(err)
+		return cigExchange.NewRequestDecodingError(err)
 	}
 
 	missingFieldNames := make([]string, 0)
