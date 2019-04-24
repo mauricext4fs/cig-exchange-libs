@@ -45,7 +45,7 @@ const (
 	ActivityTypeOfferingClick        = "offering_click"
 	ActivityTypeGetOfferingsMedia    = "get_offerings_media"
 	ActivityTypeUploadMedia          = "upload_media"
-	ActivityTypeCreateOfferingsMedia = "create_offerings_media"
+	ActivityTypeUpdateOfferingsMedia = "update_offerings_media"
 	ActivityTypeDeleteOfferingsMedia = "delete_offerings_media"
 )
 

@@ -41,6 +41,12 @@ func (*Media) BeforeCreate(scope *gorm.Scope) error {
 	return nil
 }
 
+// GetMultilangFields returns jsonb fields
+func (media *Media) GetMultilangFields() []string {
+
+	return []string{}
+}
+
 // OfferingMedia is a struct to represent an offering media link
 type OfferingMedia struct {
 	ID         string     `json:"id" gorm:"column:id;primary_key"`
@@ -69,6 +75,23 @@ func (*OfferingMedia) BeforeCreate(scope *gorm.Scope) error {
 	return nil
 }
 
+// GetMedia queries a single media from db
+func GetMedia(mediaID string) (*Media, *cigExchange.APIError) {
+
+	media := &Media{
+		ID: mediaID,
+	}
+	db := cigExchange.GetDB().First(media)
+	if db.Error != nil {
+		if db.RecordNotFound() {
+			return nil, cigExchange.NewInvalidFieldError("media_id", "Media with provided id doesn't exist")
+		}
+		return nil, cigExchange.NewDatabaseError("Fetch media failed", db.Error)
+	}
+
+	return media, nil
+}
+
 // CreateMediaForOffering creates media and offering media link
 func CreateMediaForOffering(media *Media, offeringID string) *cigExchange.APIError {
 
@@ -93,6 +116,21 @@ func CreateMediaForOffering(media *Media, offeringID string) *cigExchange.APIErr
 		return cigExchange.NewDatabaseError("Create offering media failed", db.Error)
 	}
 
+	return nil
+}
+
+// Update existing media object in db
+func (media *Media) Update(update map[string]interface{}) *cigExchange.APIError {
+
+	// check that UUID is set
+	if _, ok := update["id"]; !ok {
+		return cigExchange.NewInvalidFieldError("id", "Invalid media id")
+	}
+
+	err := cigExchange.GetDB().Model(media).Updates(update).Error
+	if err != nil {
+		return cigExchange.NewDatabaseError("Failed to update media", err)
+	}
 	return nil
 }
 
