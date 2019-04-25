@@ -12,13 +12,13 @@ import (
 type Media struct {
 	ID            string     `json:"id" gorm:"column:id;primary_key"`
 	Type          string     `json:"type" gorm:"column:type"`
-	Subtype       *string    `json:"subtype" gorm:"column:subtype"`
+	Subtype       *string    `json:"subtype,omitempty" gorm:"column:subtype"`
 	Title         string     `json:"title" gorm:"column:title"`
 	URL           string     `json:"url" gorm:"column:url"`
 	MimeType      string     `json:"mime_type" gorm:"column:mime_type"`
 	FileExtension string     `json:"file_extension" gorm:"column:file_extension"`
 	FileSize      int        `json:"file_size" gorm:"column:file_size"`
-	Description   *string    `json:"description" gorm:"column:description"`
+	Description   *string    `json:"description,omitempty" gorm:"column:description"`
 	CreatedAt     time.Time  `json:"created_at" gorm:"column:created_at"`
 	UpdatedAt     time.Time  `json:"updated_at" gorm:"column:updated_at"`
 	DeletedAt     *time.Time `json:"-" gorm:"column:deleted_at"`
