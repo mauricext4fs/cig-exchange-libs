@@ -272,7 +272,7 @@ func GetOrganisationUsersInfo(organisationID string) ([]*OrganisationUserInfo, *
 
 	selectS := "SELECT \"user\".name, \"user\".lastname, user_id, COUNT(user_id) as c, extract(epoch from sum(\"user_activity\".updated_at - \"user_activity\".created_at)) / count(*) as average FROM public.user_activity "
 	joinS := "INNER JOIN public.user ON public.user_activity.user_id = public.user.id "
-	whereS := "WHERE type = 'user_session' and jwt @> '{\"organisation_id\": \"" + organisationID + "\"}' "
+	whereS := "WHERE \"user\".role <> '" + UserRoleAdmin + "' and type = 'user_session' and jwt @> '{\"organisation_id\": \"" + organisationID + "\"}' "
 	groupS := "GROUP BY user_id, \"user\".name, \"user\".lastname;"
 	// get user sessions
 	rows, err := cigExchange.GetDB().Raw(selectS + joinS + whereS + groupS).Rows()
