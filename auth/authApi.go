@@ -14,7 +14,6 @@ import (
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
 	"github.com/jinzhu/gorm/dialects/postgres"
-	uuid "github.com/satori/go.uuid"
 )
 
 // Constants defining the active platform
@@ -31,16 +30,6 @@ const expiration = time.Minute * tokenExpirationTimeInMin
 
 type userResponse struct {
 	UUID string `json:"uuid"`
-}
-
-func (resp *userResponse) randomUUID() {
-	UUID, err := uuid.NewV4()
-	if err != nil {
-		// uuid for an unlikely event of NewV4 failure
-		resp.UUID = "fdb283d4-7341-4517-b501-371d22d27cfc"
-		return
-	}
-	resp.UUID = UUID.String()
 }
 
 type verificationCodeRequest struct {
@@ -257,7 +246,7 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 	defer cigExchange.PrintAPIError(apiErrorP)
 
 	resp := &userResponse{}
-	resp.randomUUID()
+	resp.UUID = cigExchange.RandomUUID()
 
 	userReq := &UserRequest{}
 
@@ -340,7 +329,7 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 
 	// prepare silence error response
 	resp := &userResponse{}
-	resp.randomUUID()
+	resp.UUID = cigExchange.RandomUUID()
 
 	// check user
 	apiError := user.TrimFieldsAndValidate()
@@ -529,7 +518,7 @@ func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	defer cigExchange.PrintAPIError(apiErrorP)
 
 	resp := &userResponse{}
-	resp.randomUUID()
+	resp.UUID = cigExchange.RandomUUID()
 
 	userReq := &UserRequest{}
 	// decode user object from request body

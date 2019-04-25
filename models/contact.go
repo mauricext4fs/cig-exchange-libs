@@ -1,10 +1,10 @@
 package models
 
 import (
+	cigExchange "cig-exchange-libs"
 	"time"
 
 	"github.com/jinzhu/gorm"
-	uuid "github.com/satori/go.uuid"
 )
 
 // Constants defining the contact level
@@ -45,12 +45,7 @@ func (*Contact) TableName() string {
 // BeforeCreate generates new unique UUIDs for new db records
 func (*Contact) BeforeCreate(scope *gorm.Scope) error {
 
-	UUID, err := uuid.NewV4()
-	if err != nil {
-		return err
-	}
-	scope.SetColumn("ID", UUID.String())
-
+	scope.SetColumn("ID", cigExchange.RandomUUID())
 	return nil
 }
 
@@ -73,11 +68,6 @@ func (*UserContact) TableName() string {
 // BeforeCreate generates new unique UUIDs for new db records
 func (*UserContact) BeforeCreate(scope *gorm.Scope) error {
 
-	UUID, err := uuid.NewV4()
-	if err != nil {
-		return err
-	}
-	scope.SetColumn("ID", UUID.String())
-
+	scope.SetColumn("ID", cigExchange.RandomUUID())
 	return nil
 }

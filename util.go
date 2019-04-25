@@ -8,9 +8,11 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strings"
 
 	"github.com/jinzhu/gorm/dialects/postgres"
 	"github.com/mattbaird/gochimp"
+	uuid "github.com/satori/go.uuid"
 )
 
 const letterBytes = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -22,6 +24,18 @@ func RandCode(n int) string {
 		b[i] = letterBytes[rand.Intn(len(letterBytes))]
 	}
 	return string(b)
+}
+
+// RandomUUID generates new random V4 UUID string
+func RandomUUID() string {
+	UUID, err := uuid.NewV4()
+	if err != nil {
+		// uuid for an unlikely event of NewV4 failure
+		fmt.Printf("[WARNING] Error creating V4 UUID, generating it manually: %v", err.Error())
+		res := RandCode(8) + "-" + RandCode(4) + "-" + RandCode(4) + "-" + RandCode(4) + "-" + RandCode(12)
+		return strings.ToLower(res)
+	}
+	return UUID.String()
 }
 
 // GenerateRedisKey generates key for storing email auth access code in redis

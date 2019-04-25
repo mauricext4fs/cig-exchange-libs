@@ -6,7 +6,6 @@ import (
 
 	"github.com/jinzhu/gorm"
 	"github.com/jinzhu/gorm/dialects/postgres"
-	uuid "github.com/satori/go.uuid"
 )
 
 // UserActivity types
@@ -71,13 +70,7 @@ func (*UserActivity) TableName() string {
 
 // BeforeCreate generates new unique UUIDs for new db records
 func (*UserActivity) BeforeCreate(scope *gorm.Scope) error {
-
-	UUID, err := uuid.NewV4()
-	if err != nil {
-		return err
-	}
-	scope.SetColumn("ID", UUID.String())
-
+	scope.SetColumn("ID", cigExchange.RandomUUID())
 	return nil
 }
 
