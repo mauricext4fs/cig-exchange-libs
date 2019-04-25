@@ -50,12 +50,7 @@ func (*Organisation) TableName() string {
 // BeforeCreate generates new unique UUIDs for new db records
 func (*Organisation) BeforeCreate(scope *gorm.Scope) error {
 
-	UUID, err := uuid.NewV4()
-	if err != nil {
-		return err
-	}
-	scope.SetColumn("ID", UUID.String())
-
+	scope.SetColumn("ID", cigExchange.RandomUUID())
 	return nil
 }
 
@@ -445,12 +440,7 @@ func (*OrganisationUser) TableName() string {
 // BeforeCreate generates new unique UUIDs for new db records
 func (*OrganisationUser) BeforeCreate(scope *gorm.Scope) error {
 
-	UUID, err := uuid.NewV4()
-	if err != nil {
-		return err
-	}
-	scope.SetColumn("ID", UUID.String())
-
+	scope.SetColumn("ID", cigExchange.RandomUUID())
 	return nil
 }
 
