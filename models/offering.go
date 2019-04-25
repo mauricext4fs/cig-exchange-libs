@@ -8,7 +8,6 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/jinzhu/gorm/dialects/postgres"
 	"github.com/lib/pq"
-	uuid "github.com/satori/go.uuid"
 )
 
 // Offering is a struct to represent an offering

@@ -1,10 +1,10 @@
 package models
 
 import (
+	cigExchange "cig-exchange-libs"
 	"time"
 
 	"github.com/jinzhu/gorm"
-	uuid "github.com/satori/go.uuid"
 )
 
 // Info is a struct to represent an info
