@@ -27,6 +27,7 @@ const (
 // nested API Error reasons
 const (
 	ReasonUserAlreadyExists           = "User already exists"
+	ReasonInvitationAlreadyExists     = "User is already invited"
 	ReasonUserDoesntExist             = "User doesn't exist"
 	ReasonOrganisationDoesntExist     = "Organisation doesn't exist"
 	ReasonOrganisationUserDoesntExist = "Organisation User doesn't exist"

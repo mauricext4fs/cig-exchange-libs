@@ -732,7 +732,9 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 				role = models.OrganisationRoleAdmin
 			}
 
-			if orgUser.Status != models.OrganisationUserStatusActive {
+			// do not activate invitations automatically... (OrganisationUserStatusInvited)
+			// user still needs to follow the email link and accept invitation explicitely
+			if orgUser.Status == models.OrganisationUserStatusUnverified {
 				orgUser.Status = models.OrganisationUserStatusActive
 				orgUser.OrganisationRole = role
 				orgUser.Update()
