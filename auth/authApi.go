@@ -243,13 +243,13 @@ func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler
 		redisKey := tk.UserUUID + "|" + tk.OrganisationUUID
 		redisCmd := cigExchange.GetRedis().Get(redisKey)
 		if redisCmd.Err() != nil {
-			apiError := cigExchange.NewAccessForbiddenError("Token is not valid.")
+			apiError := cigExchange.NewAccessForbiddenError("Token is not valid (not issued by the server).")
 			fmt.Println(apiError.ToString())
 			cigExchange.RespondWithAPIError(w, apiError)
 			return
 		}
 		if redisCmd.Val() != tokenPart {
-			apiError := cigExchange.NewAccessForbiddenError("Token is not match.")
+			apiError := cigExchange.NewAccessForbiddenError("Token is corrupted (not issued by the server).")
 			fmt.Println(apiError.ToString())
 			cigExchange.RespondWithAPIError(w, apiError)
 			return
