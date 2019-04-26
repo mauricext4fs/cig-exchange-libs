@@ -25,9 +25,6 @@ const (
 // Expiration time is one month
 const tokenExpirationTimeInMin = 60 * 24 * 31
 
-// Token expiration
-const expiration = time.Minute * tokenExpirationTimeInMin
-
 type userResponse struct {
 	UUID string `json:"uuid"`
 }
@@ -130,6 +127,35 @@ type key int
 const (
 	keyJWT key = iota
 )
+
+// GenerateJWTString generates JWT token string based on user and organisation UUIDS
+func GenerateJWTString(userUUID, organisationUUID string) (string, *cigExchange.APIError) {
+	tk := &token{
+		userUUID,
+		organisationUUID,
+		jwt.StandardClaims{
+			IssuedAt:  time.Now().Unix(),
+			ExpiresAt: time.Now().Add(time.Minute * tokenExpirationTimeInMin).Unix(),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tk)
+	tokenString, err := token.SignedString([]byte(os.Getenv("TOKEN_PASSWORD")))
+	if err != nil {
+		apiError := cigExchange.NewTokenError("Token generation failed", err)
+		return "", apiError
+	}
+
+	// save token in redis
+	redisKey := tk.UserUUID + "|" + tk.OrganisationUUID
+
+	redisCmd := cigExchange.GetRedis().Set(redisKey, tokenString, time.Minute*tokenExpirationTimeInMin)
+	if redisCmd.Err() != nil {
+		apiError := cigExchange.NewRedisError("Set token failure", redisCmd.Err())
+		return "", apiError
+	}
+
+	return tokenString, nil
+}
 
 // GetContextValues extracts the userID and organisationID from the request context
 // Should be used by JWT enabled API calls
@@ -800,42 +826,19 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	// verification passed, generate jwt and return it
-	tk := &token{
-		user.ID,
-		organisationUser.OrganisationID,
-		jwt.StandardClaims{
-			IssuedAt:  time.Now().Unix(),
-			ExpiresAt: time.Now().Add(expiration).Unix(),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tk)
-	tokenString, err := token.SignedString([]byte(os.Getenv("TOKEN_PASSWORD")))
-	if err != nil {
-		*apiErrorP = secureErrorResponse
-		fmt.Println("VerifyCode: jwt generation failed:")
-		fmt.Println(err.Error())
-		cigExchange.RespondWithAPIError(w, secureErrorResponse)
-		return
-	}
+	tokenString, apiError := GenerateJWTString(user.ID, organisationUser.OrganisationID)
 
-	// save token in redis
-	redisKey := tk.UserUUID + "|" + tk.OrganisationUUID
-
-	redisCmd := cigExchange.GetRedis().Set(redisKey, tokenString, expiration)
-	if redisCmd.Err() != nil {
-		*apiErrorP = cigExchange.NewRedisError("Set token failure", redisCmd.Err())
+	if apiError != nil {
+		*apiErrorP = apiError
 		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
 	loggedInUser := &LoggedInUser{}
-	loggedInUser.UserUUID = tk.UserUUID
-	loggedInUser.OrganisationUUID = tk.OrganisationUUID
-	issued := time.Unix(tk.IssuedAt, 0)
-	expires := time.Unix(tk.ExpiresAt, 0)
-
-	loggedInUser.CreationDate = issued
-	loggedInUser.ExpirationDate = expires
+	loggedInUser.UserUUID = user.ID
+	loggedInUser.OrganisationUUID = organisationUser.OrganisationID
+	loggedInUser.CreationDate = time.Now()
+	loggedInUser.ExpirationDate = time.Now().Add(time.Minute * tokenExpirationTimeInMin)
 
 	*loggedInUserP = loggedInUser
 
@@ -952,38 +955,18 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 	}
 
 	// verification passed, generate jwt and return it
-	tk := &token{
-		loggedInUser.UserUUID,
-		organisationID,
-		jwt.StandardClaims{
-			IssuedAt:  time.Now().Unix(),
-			ExpiresAt: time.Now().Add(time.Minute * tokenExpirationTimeInMin).Unix(),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tk)
-	tokenString, err := token.SignedString([]byte(os.Getenv("TOKEN_PASSWORD")))
-	if err != nil {
-		*apiErrorP = cigExchange.NewTokenError("Token generation failed", err)
+	tokenString, apiError := GenerateJWTString(loggedInUser.UserUUID, organisationID)
+	if apiError != nil {
+		*apiErrorP = apiError
 		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
 
 	// remove previous token from redis
 	redisKey := loggedInUser.UserUUID + "|" + loggedInUser.OrganisationUUID
-
 	intRedisCmd := cigExchange.GetRedis().Del(redisKey)
 	if intRedisCmd.Err() != nil {
 		*apiErrorP = cigExchange.NewRedisError("Del token failure", intRedisCmd.Err())
-		cigExchange.RespondWithAPIError(w, *apiErrorP)
-		return
-	}
-
-	// save token in redis
-	redisKey = tk.UserUUID + "|" + tk.OrganisationUUID
-
-	redisCmd := cigExchange.GetRedis().Set(redisKey, tokenString, expiration)
-	if redisCmd.Err() != nil {
-		*apiErrorP = cigExchange.NewRedisError("Set token failure", redisCmd.Err())
 		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return
 	}
