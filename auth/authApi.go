@@ -35,7 +35,8 @@ type verificationCodeRequest struct {
 	Code string `json:"code"`
 }
 
-type jwtResponse struct {
+// JwtResponse structure
+type JwtResponse struct {
 	JWT string `json:"jwt"`
 }
 
@@ -842,7 +843,7 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 
 	*loggedInUserP = loggedInUser
 
-	resp := &jwtResponse{
+	resp := &JwtResponse{
 		JWT: tokenString,
 	}
 	cigExchange.Respond(w, resp)
@@ -971,7 +972,7 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	resp := &jwtResponse{
+	resp := &JwtResponse{
 		JWT: tokenString,
 	}
 	cigExchange.Respond(w, resp)
