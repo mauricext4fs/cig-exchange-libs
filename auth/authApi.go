@@ -793,7 +793,7 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	// user is verified
 	user.Status = models.UserStatusVerified
 	apiError = user.Save()
-	if err != nil {
+	if apiError != nil {
 		*apiErrorP = apiError
 		cigExchange.RespondWithAPIError(w, *apiErrorP)
 		return

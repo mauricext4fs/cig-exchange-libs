@@ -443,6 +443,23 @@ func (*OrganisationUser) BeforeCreate(scope *gorm.Scope) error {
 	return nil
 }
 
+// OrganisationUserByID queries a single OrganisationUser object from db
+func OrganisationUserByID(organisationUserID string) (*OrganisationUser, *cigExchange.APIError) {
+
+	orgUser := &OrganisationUser{
+		ID: organisationUserID,
+	}
+	db := cigExchange.GetDB().First(orgUser)
+	if db.Error != nil {
+		if db.RecordNotFound() {
+			return nil, cigExchange.NewInvalidFieldError("organisation_user_id", "OrganisationUser with provided id doesn't exist")
+		}
+		return nil, cigExchange.NewDatabaseError("Fetch OrganisationUser failed", db.Error)
+	}
+
+	return orgUser, nil
+}
+
 // Create inserts new organisation user object into db
 func (orgUser *OrganisationUser) Create() *cigExchange.APIError {
 
