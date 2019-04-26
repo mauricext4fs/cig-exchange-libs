@@ -924,6 +924,23 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 	}
 	*loggedInUserP = loggedInUser
 
+	// check if user is already logged into the organisation
+	if loggedInUser.OrganisationUUID == organisationID {
+		// respond with the same JWT
+		authHeader := r.Header.Get("Authorization")
+		splitted := strings.Split(authHeader, " ")
+		if len(splitted) != 2 {
+			*apiErrorP = cigExchange.NewAccessForbiddenError("Invalid/Malformed auth token.")
+			cigExchange.RespondWithAPIError(w, *apiErrorP)
+			return
+		}
+		resp := &JwtResponse{
+			JWT: splitted[1],
+		}
+		cigExchange.Respond(w, resp)
+		return
+	}
+
 	// check admin
 	userRole, apiError := models.GetUserRole(loggedInUser.UserUUID)
 	if apiError != nil {
