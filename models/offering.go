@@ -8,7 +8,6 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/jinzhu/gorm/dialects/postgres"
 	"github.com/lib/pq"
-	uuid "github.com/satori/go.uuid"
 )
 
 // Offering is a struct to represent an offering
@@ -55,12 +54,7 @@ func (*Offering) TableName() string {
 // BeforeCreate generates new unique UUIDs for new db records
 func (*Offering) BeforeCreate(scope *gorm.Scope) error {
 
-	UUID, err := uuid.NewV4()
-	if err != nil {
-		return err
-	}
-	scope.SetColumn("ID", UUID.String())
-
+	scope.SetColumn("ID", cigExchange.RandomUUID())
 	return nil
 }
 

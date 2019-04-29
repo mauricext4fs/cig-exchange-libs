@@ -27,6 +27,8 @@ const (
 // nested API Error reasons
 const (
 	ReasonUserAlreadyExists           = "User already exists"
+	ReasonInvitationAlreadyExists     = "User is already invited"
+	ReasonInvitationAlreadyAccepted   = "Invitation is already accepted"
 	ReasonUserDoesntExist             = "User doesn't exist"
 	ReasonOrganisationDoesntExist     = "Organisation doesn't exist"
 	ReasonOrganisationUserDoesntExist = "Organisation User doesn't exist"
@@ -164,11 +166,11 @@ func NewDatabaseError(message string, err error) *APIError {
 	return apiErr
 }
 
-// NewReadError creates APIError with ErrorTypeInternalServer
+// NewReadError creates APIError with ErrorTypeBadRequest
 // and nested error with ReasonReadFailure reason
 func NewReadError(message string, err error) *APIError {
 	apiErr := &APIError{}
-	apiErr.SetErrorType(ErrorTypeInternalServer)
+	apiErr.SetErrorType(ErrorTypeBadRequest)
 
 	nesetedError := apiErr.NewNestedError(ReasonReadFailure, message)
 	nesetedError.OriginalError = err

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/jinzhu/gorm"
-	uuid "github.com/satori/go.uuid"
 )
 
 // Constants defining the user status
@@ -34,7 +33,6 @@ type User struct {
 	LoginPhoneUUID *string    `json:"-" gorm:"column:login_phone"`
 	Info           *Info      `json:"-" gorm:"foreignkey:InfoUUID;association_foreignkey:ID"`
 	InfoUUID       *string    `json:"-" gorm:"column:info"`
-	Verified       int64      `json:"-" gorm:"column:verified"`
 	Status         string     `json:"-" gorm:"column:status;default:'unverified'"`
 	CreatedAt      time.Time  `json:"-" gorm:"column:created_at"`
 	UpdatedAt      time.Time  `json:"-" gorm:"column:updated_at"`
@@ -49,12 +47,7 @@ func (user *User) TableName() string {
 // BeforeCreate generates new unique UUIDs for new db records
 func (user *User) BeforeCreate(scope *gorm.Scope) error {
 
-	UUID, err := uuid.NewV4()
-	if err != nil {
-		return err
-	}
-	scope.SetColumn("ID", UUID.String())
-
+	scope.SetColumn("ID", cigExchange.RandomUUID())
 	return nil
 }
 
@@ -185,118 +178,6 @@ func (user *User) Save() *cigExchange.APIError {
 		return cigExchange.NewDatabaseError("Save user call failed", err)
 	}
 	return nil
-}
-
-// CreateInvitedUser creates new user or invites existing
-func CreateInvitedUser(user *User, organisation *Organisation) (*User, *cigExchange.APIError) {
-
-	// invalidate the uuid
-	user.ID = ""
-
-	apiErr := user.TrimFieldsAndValidate()
-	if apiErr != nil {
-		return nil, apiErr
-	}
-
-	existingUser := &User{}
-
-	needToCreateUser := false
-
-	contacts := make([]Contact, 0)
-
-	// check that email is unique
-	db := cigExchange.GetDB().Where("value1 = ?", user.LoginEmail.Value1).Find(&contacts)
-	if db.Error != nil {
-		// we expect record not found error here
-		if !db.RecordNotFound() {
-			return nil, cigExchange.NewDatabaseError("Contact lookup failed", db.Error)
-		}
-
-		// proceed to create organisation user
-		needToCreateUser = true
-	} else {
-		unverifiedUsers := make([]*User, 0)
-		isVerified := false
-		for _, contact := range contacts {
-			// handle existing contacts
-			existingUser = &User{}
-			db = cigExchange.GetDB().Model(contact).Related(existingUser, "LoginEmail")
-			if db.Error != nil {
-				if !db.RecordNotFound() {
-					return nil, cigExchange.NewDatabaseError("User lookup failed", db.Error)
-				}
-				// ignoring contacts without user
-			} else {
-				if existingUser.Status == UserStatusVerified {
-					// found verified user
-					isVerified = true
-					break
-				}
-				// add to unverified users
-				unverifiedUsers = append(unverifiedUsers, existingUser)
-			}
-		}
-
-		if isVerified {
-			// prefill the uuid
-			orgUserWhere := &OrganisationUser{
-				UserID:         existingUser.ID,
-				OrganisationID: organisation.ID,
-			}
-			existedOrgUser := &OrganisationUser{}
-			// find organization user connections
-			db := cigExchange.GetDB().Where(orgUserWhere).First(existedOrgUser)
-			if db.Error != nil {
-				if !db.RecordNotFound() {
-					return nil, cigExchange.NewDatabaseError("OrganisationUser lookup failed", db.Error)
-				}
-				// proceed to create organisation user
-			} else {
-				if existedOrgUser.Status == OrganisationUserStatusInvited {
-					return nil, cigExchange.NewInvalidFieldError("email", "User already invited")
-				}
-				return nil, cigExchange.NewInvalidFieldError("email", "User already belongs to organisation")
-			}
-		} else { // only unverified users
-			// delete all users
-			for _, unverifiedUser := range unverifiedUsers {
-				apiError := deleteUnverifiedUser(unverifiedUser)
-				if apiError != nil {
-					return nil, apiError
-				}
-			}
-
-			needToCreateUser = true
-		}
-	}
-
-	if needToCreateUser {
-		err := cigExchange.GetDB().Create(user).Error
-		if err != nil {
-			return nil, cigExchange.NewDatabaseError("Create user call failed", err)
-		}
-		existingUser = user
-
-		apiError := createUserContacts(user)
-		if apiError != nil {
-			return nil, apiError
-		}
-	}
-
-	// create organisation link for the user
-	orgUser := &OrganisationUser{
-		UserID:           existingUser.ID,
-		OrganisationID:   organisation.ID,
-		Status:           OrganisationUserStatusInvited,
-		IsHome:           false,
-		OrganisationRole: OrganisationRoleUser,
-	}
-	apiErr = orgUser.Create()
-	if apiErr != nil {
-		return nil, apiErr
-	}
-
-	return existingUser, nil
 }
 
 // Update existing user object in db
