@@ -35,7 +35,6 @@ type Organisation struct {
 	ReferenceKey              string         `json:"reference_key" gorm:"column:reference_key"`
 	OfferingRatingDescription postgres.Jsonb `json:"offering_rating_description" gorm:"column:offering_rating_description"`
 	Status                    string         `json:"status" gorm:"column:status;default:'unverified'"`
-	Verified                  int64          `json:"-" gorm:"column:verified"`
 	CreatedAt                 time.Time      `json:"created_at" gorm:"column:created_at"`
 	UpdatedAt                 time.Time      `json:"updated_at" gorm:"column:updated_at"`
 	DeletedAt                 *time.Time     `json:"-" gorm:"column:deleted_at"`
