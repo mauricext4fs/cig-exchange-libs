@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/jinzhu/gorm/dialects/postgres"
 	"github.com/mattbaird/gochimp"
@@ -85,10 +87,44 @@ func RespondWithAPIError(w http.ResponseWriter, apiErr *APIError) {
 }
 
 // PrintAPIError prints apiError
-func PrintAPIError(apiErrorP **APIError) {
-	if *apiErrorP != nil {
-		fmt.Println((*apiErrorP).ToString())
+func PrintAPIError(info *ActivityInformation) {
+	if info.APIError != nil {
+		fmt.Println(info.APIError.ToString())
 	}
+}
+
+// LoggedInUser is passed to controllers after jwt auth
+type LoggedInUser struct {
+	UserUUID         string    `json:"user_id"`
+	OrganisationUUID string    `json:"organisation_id"`
+	CreationDate     time.Time `json:"creation_date"`
+	ExpirationDate   time.Time `json:"expiration_date"`
+}
+
+// ActivityInformation stores activity information for logging
+type ActivityInformation struct {
+	APIError     *APIError
+	LoggedInUser *LoggedInUser
+	RemoteAddr   string
+}
+
+// PrepareActivityInformation creates ActivityInformation with prefilled remote address
+func PrepareActivityInformation(rAddress string) *ActivityInformation {
+
+	info := &ActivityInformation{}
+	var remoteIP string
+	if strings.ContainsRune(rAddress, ':') {
+		tempIP, _, err := net.SplitHostPort(rAddress)
+		if err != nil {
+			remoteIP = rAddress
+		} else {
+			remoteIP = tempIP
+		}
+	} else {
+		remoteIP = rAddress
+	}
+	info.RemoteAddr = remoteIP
+	return info
 }
 
 // MultilangModel interface for all multilang models
