@@ -184,7 +184,7 @@ func (user *User) Save() *cigExchange.APIError {
 func (user *User) Update(update map[string]interface{}) *cigExchange.APIError {
 
 	// check that UUID is set
-	if _, ok := update["id"]; !ok || len(user.ID) == 0 {
+	if _, ok := update["id"]; !ok {
 		return cigExchange.NewInvalidFieldError("user_id", "User UUID is not set")
 	}
 
