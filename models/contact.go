@@ -90,7 +90,7 @@ func GetContacts(userID string) ([]*ContactWithIndex, *cigExchange.APIError) {
 
 	selectS := "SELECT contact.*, user_contact.index FROM public.contact "
 	joinS := "INNER JOIN public.user_contact ON contact.id = user_contact.contact_id "
-	whereS := "WHERE user_contact.user_id = '" + userID + "';"
+	whereS := "WHERE user_contact.user_id = '" + userID + "' AND user_contact.deleted_at IS NULL AND contact.deleted_at IS NULL;"
 	// query ContactWithIndex structs
 	db := cigExchange.GetDB().Raw(selectS + joinS + whereS).Scan(&contacts)
 	if db.Error != nil {
@@ -187,6 +187,15 @@ func (contact *Contact) Update(userID string, update map[string]interface{}, ind
 // Delete existing offering object in db
 func (contact *Contact) Delete(userID string) *cigExchange.APIError {
 
+	userCont := &UserContact{ContactID: contact.ID, UserID: userID}
+	db := cigExchange.GetDB().First(userCont)
+	if db.Error != nil {
+		if db.RecordNotFound() {
+			return cigExchange.NewInvalidFieldError("contact_id, user_id", "User contact link with provided id doesn't exist")
+		}
+		return cigExchange.NewDatabaseError("Fetch user contact failed", db.Error)
+	}
+
 	tx := cigExchange.GetDB().Begin()
 
 	// check that UUID is set
@@ -195,29 +204,29 @@ func (contact *Contact) Delete(userID string) *cigExchange.APIError {
 	}
 
 	// delete contact
-	err := tx.Delete(contact).Error
-	if err != nil {
+	tx = tx.Delete(contact)
+	if tx.Error != nil {
 		tx.Rollback()
-		return cigExchange.NewDatabaseError("Failed to delete contact", err)
+		return cigExchange.NewDatabaseError("Failed to delete contact", tx.Error)
 	}
-	if tx.RowsAffected == 0 {
+	if tx.RowsAffected != 1 {
 		tx.Rollback()
-		return cigExchange.NewInvalidFieldError("contact_id", "Contact with provided id doesn't exist")
+		return cigExchange.NewInvalidFieldError("contact_id", "Contact doesn't exist")
 	}
 
 	// delete user contact link
-	err = tx.Delete(&UserContact{ContactID: contact.ID, UserID: userID}).Error
-	if err != nil {
+	tx = tx.Delete(&UserContact{ID: userCont.ID})
+	if tx.Error != nil {
 		tx.Rollback()
-		return cigExchange.NewDatabaseError("Failed to delete user contact", err)
+		return cigExchange.NewDatabaseError("Failed to delete user contact", tx.Error)
 	}
-	if tx.RowsAffected == 0 {
+	if tx.RowsAffected != 1 {
 		tx.Rollback()
-		return cigExchange.NewInvalidFieldError("contact_id", "User Contact link doesn't exist")
+		return cigExchange.NewInvalidFieldError("contact_id, user_id", "User Contact link doesn't exist")
 	}
 
 	// commit deletion
-	if err = tx.Commit().Error; err != nil {
+	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
 		return cigExchange.NewDatabaseError("Commit contact deletion failed", err)
 	}

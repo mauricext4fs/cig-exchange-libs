@@ -265,7 +265,7 @@ func GetOrganisationUsersInfo(organisationID string) ([]*OrganisationUserInfo, *
 
 	selectS := "SELECT \"user\".name, \"user\".lastname, user_id, COUNT(user_id) as c, extract(epoch from sum(\"user_activity\".updated_at - \"user_activity\".created_at)) / count(*) as average FROM public.user_activity "
 	joinS := "INNER JOIN public.user ON public.user_activity.user_id = public.user.id "
-	whereS := "WHERE \"user\".role <> '" + UserRoleAdmin + "' and type = 'user_session' and jwt @> '{\"organisation_id\": \"" + organisationID + "\"}' "
+	whereS := "WHERE \"user\".role <> '" + UserRoleAdmin + "' AND \"user\".deleted_at IS NULL AND type = 'user_session' AND jwt @> '{\"organisation_id\": \"" + organisationID + "\"}' "
 	groupS := "GROUP BY user_id, \"user\".name, \"user\".lastname;"
 	// get user sessions
 	rows, err := cigExchange.GetDB().Raw(selectS + joinS + whereS + groupS).Rows()
@@ -301,7 +301,7 @@ func GetOfferingsTypeBreakdown(organisationID string) ([]*OrganisationOfferingsT
 
 	selectS := "SELECT count(x.offering_type) as total, x.offering_type FROM public.offering o , LATERAL "
 	lateralS := "(SELECT unnest(o.type) AS offering_type) x "
-	whereS := "WHERE o.organisation_id = '" + organisationID + "' "
+	whereS := "WHERE o.organisation_id = '" + organisationID + "' AND o.deleted_at IS NULL "
 	groupS := "GROUP BY x.offering_type ORDER BY total DESC;"
 	// get organisation offerings breakdown
 	rows, err := cigExchange.GetDB().Raw(selectS + lateralS + whereS + groupS).Rows()
@@ -392,7 +392,7 @@ func GetOfferingsClicks(organisationID string) ([]*OrganisationOfferingClicks, *
 				}
 			}
 		}
-		selectS := "SELECT count(*) as total FROM public.user_activity WHERE type = 'offering_click' and info ~ '" + offering.ID + "';"
+		selectS := "SELECT count(*) as total FROM public.user_activity WHERE type = 'offering_click' AND info ~ '" + offering.ID + "' AND deleted_at IS NULL;"
 		// get organisation offerings breakdown
 		row := cigExchange.GetDB().Raw(selectS).Row()
 		var amount int

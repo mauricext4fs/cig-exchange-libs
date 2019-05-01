@@ -198,3 +198,44 @@ func SendEmail(eType emailType, email string, parameters map[string]string) erro
 	_, err := mandrillClient.MessageSend(message, false)
 	return err
 }
+
+// ConvertToInt32 converts interface to int32
+func ConvertToInt32(val interface{}) (returnVal int32, result bool) {
+
+	var i int32
+	result = true
+
+	switch t := val.(type) {
+	case int:
+		i = int32(t)
+	case int8:
+		i = int32(t)
+	case int16:
+		i = int32(t)
+	case int32:
+		i = t
+	case int64:
+		i = int32(t)
+	case bool:
+		if t {
+			i = 1
+		} else {
+			i = 0
+		}
+	case float32:
+		i = int32(t)
+	case float64:
+		i = int32(t)
+	case uint8:
+		i = int32(t)
+	case uint16:
+		i = int32(t)
+	case uint32:
+		i = int32(t)
+	case uint64:
+		i = int32(t)
+	default:
+		result = false
+	}
+	return i, result
+}
