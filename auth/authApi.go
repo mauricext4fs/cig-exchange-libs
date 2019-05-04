@@ -260,7 +260,7 @@ func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler
 func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	// create user activity record and print error with defer
-	info := cigExchange.PrepareActivityInformation(r.RemoteAddr)
+	info := cigExchange.PrepareActivityInformation(r)
 	defer CreateUserActivity(info, models.ActivityTypeSignUp)
 	defer cigExchange.PrintAPIError(info)
 
@@ -330,7 +330,7 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http.Request) {
 
 	// create user activity record and print error with defer
-	info := cigExchange.PrepareActivityInformation(r.RemoteAddr)
+	info := cigExchange.PrepareActivityInformation(r)
 	defer CreateUserActivity(info, models.ActivityTypeOrganisationSignUp)
 	defer cigExchange.PrintAPIError(info)
 
@@ -532,7 +532,7 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	// create user activity record and print error with defer
-	info := cigExchange.PrepareActivityInformation(r.RemoteAddr)
+	info := cigExchange.PrepareActivityInformation(r)
 	defer CreateUserActivity(info, models.ActivityTypeSignIn)
 	defer cigExchange.PrintAPIError(info)
 
@@ -578,7 +578,7 @@ func (userAPI *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// create user activity record and print error with defer
-	info := cigExchange.PrepareActivityInformation(r.RemoteAddr)
+	info := cigExchange.PrepareActivityInformation(r)
 	defer CreateUserActivity(info, models.ActivityTypeSendOtp)
 	defer cigExchange.PrintAPIError(info)
 
@@ -674,7 +674,7 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// create user activity record and print error with defer
-	info := cigExchange.PrepareActivityInformation(r.RemoteAddr)
+	info := cigExchange.PrepareActivityInformation(r)
 	defer CreateUserActivity(info, models.ActivityTypeVerifyOtp)
 	defer cigExchange.PrintAPIError(info)
 
@@ -848,7 +848,7 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 func (userAPI *UserAPI) GetInfo(w http.ResponseWriter, r *http.Request) {
 
 	// create user activity record and print error with defer
-	info := cigExchange.PrepareActivityInformation(r.RemoteAddr)
+	info := cigExchange.PrepareActivityInformation(r)
 	defer CreateUserActivity(info, models.ActivityTypeUserInfo)
 	defer cigExchange.PrintAPIError(info)
 
@@ -903,7 +903,7 @@ func (userAPI *UserAPI) GetInfo(w http.ResponseWriter, r *http.Request) {
 func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http.Request) {
 
 	// create user activity record and print error with defer
-	info := cigExchange.PrepareActivityInformation(r.RemoteAddr)
+	info := cigExchange.PrepareActivityInformation(r)
 	defer CreateUserActivity(info, models.ActivityTypeSwitchOrganisation)
 	defer cigExchange.PrintAPIError(info)
 
@@ -993,7 +993,7 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 func (userAPI *UserAPI) PingJWT(w http.ResponseWriter, r *http.Request) {
 
 	// create user activity record and print error with defer
-	info := cigExchange.PrepareActivityInformation(r.RemoteAddr)
+	info := cigExchange.PrepareActivityInformation(r)
 	defer cigExchange.PrintAPIError(info)
 
 	// load context user info

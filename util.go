@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -106,20 +105,16 @@ type ActivityInformation struct {
 }
 
 // PrepareActivityInformation creates ActivityInformation with prefilled remote address
-func PrepareActivityInformation(rAddress string) *ActivityInformation {
+// X-Real-IP examined first, X-Forwarded-For examined if X-Real-IP is not present
+func PrepareActivityInformation(r *http.Request) *ActivityInformation {
 
 	info := &ActivityInformation{}
-	var remoteIP string
-	if strings.ContainsRune(rAddress, ':') {
-		tempIP, _, err := net.SplitHostPort(rAddress)
-		if err != nil {
-			remoteIP = rAddress
-		} else {
-			remoteIP = tempIP
-		}
-	} else {
-		remoteIP = rAddress
+	remoteIP := r.Header.Get("X-Real-IP")
+	if len(remoteIP) == 0 {
+		forwardedForParts := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+		remoteIP = forwardedForParts[0]
 	}
+
 	info.RemoteAddr = remoteIP
 	return info
 }
