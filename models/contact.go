@@ -184,7 +184,7 @@ func (contact *Contact) Update(userID string, update map[string]interface{}, ind
 	return nil
 }
 
-// Delete existing offering object in db
+// Delete existing contact object in db
 func (contact *Contact) Delete(userID string) *cigExchange.APIError {
 
 	userCont := &UserContact{ContactID: contact.ID, UserID: userID}

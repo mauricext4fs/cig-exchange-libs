@@ -133,7 +133,7 @@ func CreateUser(user *User, referenceKey string) (*User, *cigExchange.APIError) 
 		}
 
 		for _, unverifiedUser := range unverifiedUsers {
-			apiError := deleteUnverifiedUser(unverifiedUser)
+			apiError := DeleteUnverifiedUser(unverifiedUser)
 			if apiError != nil {
 				return nil, apiError
 			}
@@ -219,8 +219,8 @@ func (user *User) HasUserHomeOrganisation() (bool, *cigExchange.APIError) {
 	return true, nil
 }
 
-// deleteUnverifiedUser deletes user, contacts, userContact, organisationUser
-func deleteUnverifiedUser(user *User) *cigExchange.APIError {
+// DeleteUnverifiedUser deletes user, contacts, userContact, organisationUser
+func DeleteUnverifiedUser(user *User) *cigExchange.APIError {
 
 	// prefill the uuid
 	orgUserWhere := &OrganisationUser{

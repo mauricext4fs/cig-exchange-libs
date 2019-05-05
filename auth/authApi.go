@@ -1,11 +1,14 @@
 package auth
 
 import (
+	"bytes"
 	cigExchange "cig-exchange-libs"
 	"cig-exchange-libs/models"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -254,6 +257,51 @@ func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler
 		// proceed in the middleware chain!
 		next.ServeHTTP(w, r)
 	})
+}
+
+// CreateUserHandlerPingdom is a pingdom api endpoint to test user registration
+// Real registration is called, then cleanup gets performed
+func (userAPI *UserAPI) CreateUserHandlerPingdom(w http.ResponseWriter, r *http.Request) {
+
+	// we need to delete the created user and all created objects
+	// read the request body and prepare a bytes copy for original call
+	buffer := bytes.NewBuffer(make([]byte, 0))
+	reader := io.TeeReader(r.Body, buffer)
+
+	userReq := &UserRequest{}
+	// decode user object from request body
+	err := json.NewDecoder(reader).Decode(userReq)
+	if err != nil {
+		fmt.Printf("PingdomSignup: error decoding request body: %v", err.Error())
+		cigExchange.RespondWithAPIError(w, cigExchange.NewRequestDecodingError(err))
+		return
+	}
+
+	// close the original request body and replace it with data copy
+	defer r.Body.Close()
+	r.Body = ioutil.NopCloser(buffer)
+
+	// call the original api call
+	userAPI.CreateUserHandler(w, r)
+
+	user, apiError := models.GetUserByEmail(userReq.Email, false)
+	if apiError != nil {
+		fmt.Printf("PingdomSignup: error during user lookup: %v", apiError.ToString())
+		return
+	}
+
+	// user should be unverified
+	if user.Status != models.UserStatusUnverified {
+		fmt.Printf("PingdomSignup: error during user lookup: unexpected user status [active]")
+		return
+	}
+
+	// delete user and all associated objects
+	apiError = models.DeleteUnverifiedUser(user)
+	if apiError != nil {
+		fmt.Printf("PingdomSignup: error during user deletion: %v", apiError.ToString())
+		return
+	}
 }
 
 // CreateUserHandler handles POST api/users/signup endpoint
