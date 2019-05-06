@@ -160,7 +160,7 @@ func DeleteOfferingMedia(mediaID string) *cigExchange.APIError {
 	}
 
 	// delete offering media link
-	db = cigExchange.GetDB().Delete(&OfferingMedia{MediaID: mediaID})
+	db = cigExchange.GetDB().Where("media_id = ?", mediaID).Delete(&OfferingMedia{})
 	if db.Error != nil {
 		return cigExchange.NewDatabaseError("Failed to delete offering media link", db.Error)
 	}
