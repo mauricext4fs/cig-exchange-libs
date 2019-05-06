@@ -41,6 +41,7 @@ type Offering struct {
 	Organisation           Organisation   `json:"-" gorm:"foreignkey:OrganisationID;association_foreignkey:ID"`
 	OrganisationID         string         `json:"organisation_id" gorm:"column:organisation_id"`
 	OfferingDirectURL      postgres.Jsonb `json:"offering_direct_url" gorm:"column:offering_direct_url"`
+	Media                  []Media        `json:"media" gorm:"many2many:offering_media;"`
 	CreatedAt              time.Time      `json:"created_at" gorm:"column:created_at"`
 	UpdatedAt              time.Time      `json:"updated_at" gorm:"column:updated_at"`
 	DeletedAt              *time.Time     `json:"-" gorm:"column:deleted_at"`
@@ -214,7 +215,7 @@ func GetOffering(UUID string) (*Offering, *cigExchange.APIError) {
 func GetOfferings() ([]*Offering, *cigExchange.APIError) {
 
 	offerings := make([]*Offering, 0)
-	db := cigExchange.GetDB().Preload("Organisation").Find(&offerings)
+	db := cigExchange.GetDB().Preload("Organisation").Preload("Media").Find(&offerings)
 	if db.Error != nil {
 		if !db.RecordNotFound() {
 			return offerings, cigExchange.NewDatabaseError("Fetch all offerings failed", db.Error)
