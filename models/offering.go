@@ -41,10 +41,17 @@ type Offering struct {
 	Organisation           Organisation   `json:"-" gorm:"foreignkey:OrganisationID;association_foreignkey:ID"`
 	OrganisationID         string         `json:"organisation_id" gorm:"column:organisation_id"`
 	OfferingDirectURL      postgres.Jsonb `json:"offering_direct_url" gorm:"column:offering_direct_url"`
-	Media                  []Media        `json:"media" gorm:"many2many:offering_media;"`
+	Media                  []*Media       `json:"-" gorm:"many2many:offering_media;"`
+	MediaTypes             MediaTypes     `json:"media"`
 	CreatedAt              time.Time      `json:"created_at" gorm:"column:created_at"`
 	UpdatedAt              time.Time      `json:"updated_at" gorm:"column:updated_at"`
 	DeletedAt              *time.Time     `json:"-" gorm:"column:deleted_at"`
+}
+
+// MediaTypes stores different media types separately
+type MediaTypes struct {
+	OfferingImages    []*Media `json:"offering-images"`
+	OfferingDocuments []*Media `json:"offering-documents"`
 }
 
 // TableName returns table name for struct
@@ -147,7 +154,7 @@ func (offering *Offering) Create() *cigExchange.APIError {
 		return cigExchange.NewDatabaseError("Create offering failed", db.Error)
 	}
 
-	offering.calculateRemaining()
+	offering.processOffering()
 
 	return nil
 }
@@ -197,7 +204,7 @@ func GetOffering(UUID string) (*Offering, *cigExchange.APIError) {
 	offering := &Offering{
 		ID: UUID,
 	}
-	db := cigExchange.GetDB().Preload("Media").First(offering)
+	db := cigExchange.GetDB().Preload("Media", "offering_media.deleted_at is NULL").First(offering)
 	if db.Error != nil {
 		if db.RecordNotFound() {
 			return nil, cigExchange.NewInvalidFieldError("offering_id", "Offering with provided id doesn't exist")
@@ -206,7 +213,7 @@ func GetOffering(UUID string) (*Offering, *cigExchange.APIError) {
 	}
 
 	// fill 'remaining' field
-	offering.calculateRemaining()
+	offering.processOffering()
 
 	return offering, nil
 }
@@ -224,7 +231,7 @@ func GetOfferings() ([]*Offering, *cigExchange.APIError) {
 
 	// fill 'remaining' field
 	for _, offering := range offerings {
-		offering.calculateRemaining()
+		offering.processOffering()
 	}
 
 	return offerings, nil
@@ -243,7 +250,7 @@ func GetOrganisationOfferings(organisationID string) ([]*Offering, *cigExchange.
 
 	// fill 'remaining' field
 	for _, offering := range offerings {
-		offering.calculateRemaining()
+		offering.processOffering()
 	}
 
 	return offerings, nil
@@ -263,7 +270,7 @@ func (offering *Offering) checkRemaining() *cigExchange.APIError {
 	return nil
 }
 
-func (offering *Offering) calculateRemaining() {
+func (offering *Offering) processOffering() {
 
 	// convert nil value to 0
 	if offering.AmountAlreadyTaken == nil {
@@ -278,5 +285,17 @@ func (offering *Offering) calculateRemaining() {
 	// check for negative 'remaining' value
 	if offering.Remaining < 0 {
 		offering.Remaining = 0
+	}
+
+	offering.MediaTypes.OfferingImages = make([]*Media, 0)
+	offering.MediaTypes.OfferingDocuments = make([]*Media, 0)
+
+	// fill images and documents
+	for _, m := range offering.Media {
+		if m.Type == "image" {
+			offering.MediaTypes.OfferingImages = append(offering.MediaTypes.OfferingImages, m)
+		} else {
+			offering.MediaTypes.OfferingDocuments = append(offering.MediaTypes.OfferingDocuments, m)
+		}
 	}
 }
