@@ -232,6 +232,7 @@ func GetOfferings() ([]*Offering, *cigExchange.APIError) {
 	// fill 'remaining' field
 	for _, offering := range offerings {
 		offering.processOffering()
+		offering.MediaTypes.OfferingDocuments = make([]*Media, 0)
 	}
 
 	return offerings, nil
@@ -292,9 +293,9 @@ func (offering *Offering) processOffering() {
 
 	// fill images and documents
 	for _, m := range offering.Media {
-		if m.Type == "image" {
+		if m.Type == MediaTypeImage {
 			offering.MediaTypes.OfferingImages = append(offering.MediaTypes.OfferingImages, m)
-		} else {
+		} else if m.Type == MediaTypeDocument {
 			offering.MediaTypes.OfferingDocuments = append(offering.MediaTypes.OfferingDocuments, m)
 		}
 	}
