@@ -7,6 +7,12 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
+// Media types
+const (
+	MediaTypeDocument = "offering-document"
+	MediaTypeImage    = "offering-image"
+)
+
 // Media is a struct to represent an media
 type Media struct {
 	ID            string     `json:"id" gorm:"column:id;primary_key"`
