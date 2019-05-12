@@ -194,8 +194,25 @@ func SendEmail(eType emailType, email string, parameters map[string]string) erro
 	return err
 }
 
-// ConvertToInt32 converts interface to int32
-func ConvertToInt32(val interface{}) (returnVal int32, result bool) {
+// ParseIndex parses required field 'index' from map
+func ParseIndex(originalRequest map[string]interface{}) (int32, *APIError) {
+
+	index := int32(0)
+	// get index from original map
+	if indexVal, ok := originalRequest["index"]; ok {
+		if indexInt, ok := convertToInt32(indexVal); ok {
+			index = indexInt
+		} else {
+			return index, NewInvalidFieldError("index", "Index is not integer")
+		}
+	} else {
+		return index, NewInvalidFieldError("index", "Index is missing")
+	}
+	return index, nil
+}
+
+// convertToInt32 converts interface to int32
+func convertToInt32(val interface{}) (returnVal int32, result bool) {
 
 	var i int32
 	result = true

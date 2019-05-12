@@ -50,8 +50,8 @@ type Offering struct {
 
 // MediaTypes stores different media types separately
 type MediaTypes struct {
-	OfferingImages    []*Media `json:"offering-images"`
-	OfferingDocuments []*Media `json:"offering-documents"`
+	OfferingImages    []*MediaWithIndex `json:"offering-images"`
+	OfferingDocuments []*MediaWithIndex `json:"offering-documents"`
 }
 
 // TableName returns table name for struct
@@ -154,7 +154,7 @@ func (offering *Offering) Create() *cigExchange.APIError {
 		return cigExchange.NewDatabaseError("Create offering failed", db.Error)
 	}
 
-	offering.processOffering()
+	offering.processOffering(make(map[string]int32))
 
 	return nil
 }
@@ -212,8 +212,20 @@ func GetOffering(UUID string) (*Offering, *cigExchange.APIError) {
 		return nil, cigExchange.NewDatabaseError("Fetch offering failed", db.Error)
 	}
 
+	// query all offering media for offering
+	offeringMedia := make([]*OfferingMedia, 0)
+	db = cigExchange.GetDB().Where("offering_id = ?", UUID).Find(&offeringMedia)
+	if db.Error != nil {
+		if !db.RecordNotFound() {
+			return offering, cigExchange.NewDatabaseError("Fetch offering_media failed", db.Error)
+		}
+	}
+
+	// convert OfferingMedia array to map
+	indexMap := createMediaIndexMap(offeringMedia)
+
 	// fill 'remaining' field
-	offering.processOffering()
+	offering.processOffering(indexMap)
 
 	return offering, nil
 }
@@ -229,10 +241,22 @@ func GetOfferings() ([]*Offering, *cigExchange.APIError) {
 		}
 	}
 
+	// query all offering media
+	offeringMedia := make([]*OfferingMedia, 0)
+	db = cigExchange.GetDB().Find(&offeringMedia)
+	if db.Error != nil {
+		if !db.RecordNotFound() {
+			return offerings, cigExchange.NewDatabaseError("Fetch offering_media failed", db.Error)
+		}
+	}
+
+	// convert OfferingMedia array to map
+	indexMap := createMediaIndexMap(offeringMedia)
+
 	// fill 'remaining' field
 	for _, offering := range offerings {
-		offering.processOffering()
-		offering.MediaTypes.OfferingDocuments = make([]*Media, 0)
+		offering.processOffering(indexMap)
+		offering.MediaTypes.OfferingDocuments = make([]*MediaWithIndex, 0)
 	}
 
 	return offerings, nil
@@ -249,9 +273,21 @@ func GetOrganisationOfferings(organisationID string) ([]*Offering, *cigExchange.
 		}
 	}
 
+	// query offering media for organisation
+	offeringMedia := make([]*OfferingMedia, 0)
+	db = cigExchange.GetDB().Joins("JOIN offering on offering_media.offering_id=offering.id").Where("offering.organisation_id = ?", organisationID).Find(&offeringMedia)
+	if db.Error != nil {
+		if !db.RecordNotFound() {
+			return offerings, cigExchange.NewDatabaseError("Fetch offering_media failed", db.Error)
+		}
+	}
+
+	// convert OfferingMedia array to map
+	indexMap := createMediaIndexMap(offeringMedia)
+
 	// fill 'remaining' field
 	for _, offering := range offerings {
-		offering.processOffering()
+		offering.processOffering(indexMap)
 	}
 
 	return offerings, nil
@@ -271,7 +307,16 @@ func (offering *Offering) checkRemaining() *cigExchange.APIError {
 	return nil
 }
 
-func (offering *Offering) processOffering() {
+func createMediaIndexMap(media []*OfferingMedia) map[string]int32 {
+
+	mapMI := make(map[string]int32)
+	for _, om := range media {
+		mapMI[om.MediaID] = om.Index
+	}
+	return mapMI
+}
+
+func (offering *Offering) processOffering(indexMap map[string]int32) {
 
 	// convert nil value to 0
 	if offering.AmountAlreadyTaken == nil {
@@ -281,6 +326,7 @@ func (offering *Offering) processOffering() {
 		offering.Amount = new(float64)
 	}
 
+	// calculate remaining
 	offering.Remaining = *offering.Amount - *offering.AmountAlreadyTaken
 
 	// check for negative 'remaining' value
@@ -288,15 +334,26 @@ func (offering *Offering) processOffering() {
 		offering.Remaining = 0
 	}
 
-	offering.MediaTypes.OfferingImages = make([]*Media, 0)
-	offering.MediaTypes.OfferingDocuments = make([]*Media, 0)
+	offering.MediaTypes.OfferingImages = make([]*MediaWithIndex, 0)
+	offering.MediaTypes.OfferingDocuments = make([]*MediaWithIndex, 0)
 
 	// fill images and documents
 	for _, m := range offering.Media {
+		index, ok := indexMap[m.ID]
+		if !ok {
+			// found a Media that doesn't have a link to offering
+			continue
+		}
+		// add index to Media
+		mi := &MediaWithIndex{
+			m,
+			index,
+		}
+		// separate media by types
 		if m.Type == MediaTypeImage {
-			offering.MediaTypes.OfferingImages = append(offering.MediaTypes.OfferingImages, m)
+			offering.MediaTypes.OfferingImages = append(offering.MediaTypes.OfferingImages, mi)
 		} else if m.Type == MediaTypeDocument {
-			offering.MediaTypes.OfferingDocuments = append(offering.MediaTypes.OfferingDocuments, m)
+			offering.MediaTypes.OfferingDocuments = append(offering.MediaTypes.OfferingDocuments, mi)
 		}
 	}
 }
