@@ -2,9 +2,12 @@ package models
 
 import (
 	cigExchange "cig-exchange-libs"
+	"encoding/json"
+	"log"
 	"strings"
 	"time"
 
+	"github.com/duo-labs/webauthn/webauthn"
 	"github.com/jinzhu/gorm"
 )
 
@@ -31,6 +34,7 @@ type User struct {
 	LoginEmailUUID *string    `json:"-" gorm:"column:login_email"`
 	LoginPhone     *Contact   `json:"-" gorm:"foreignkey:LoginPhoneUUID;association_foreignkey:ID"`
 	LoginPhoneUUID *string    `json:"-" gorm:"column:login_phone"`
+	LoginWebAuthn  string     `json:"-" gorm:"column:login_webauthn"`
 	Info           *Info      `json:"-" gorm:"foreignkey:InfoUUID;association_foreignkey:ID"`
 	InfoUUID       *string    `json:"-" gorm:"column:info"`
 	Status         string     `json:"-" gorm:"column:status;default:'unverified'"`
@@ -55,6 +59,12 @@ func (user *User) BeforeCreate(scope *gorm.Scope) error {
 func (*User) GetMultilangFields() []string {
 
 	return []string{}
+}
+
+// UseWebAuthn returns web authn
+func (user *User) UseWebAuthn() bool {
+
+	return len(user.LoginWebAuthn) > 0
 }
 
 // CreateUser inserts new user object into db
@@ -487,4 +497,47 @@ func (user *User) TrimFieldsAndValidate() *cigExchange.APIError {
 	}
 
 	return nil
+}
+
+// WebAuthnID returns the user ID as a byte slice
+func (user *User) WebAuthnID() []byte {
+
+	return []byte(user.ID)
+}
+
+// WebAuthnName returns the user's username
+func (user *User) WebAuthnName() string {
+
+	if user.LoginEmail != nil && len(user.LoginEmail.Value1) > 0 {
+		return user.LoginEmail.Value1
+	}
+	return user.Name + " " + user.LastName
+}
+
+// WebAuthnDisplayName returns the user's display name
+func (user *User) WebAuthnDisplayName() string {
+	return user.Name + " " + user.LastName
+}
+
+// WebAuthnIcon returns the user's icon
+func (user *User) WebAuthnIcon() string {
+	return ""
+}
+
+// WebAuthnCredentials helps implement the webauthn.User interface by loading
+// the user's credentials from the user struct.
+func (user *User) WebAuthnCredentials() []webauthn.Credential {
+
+	creadentials := []webauthn.Credential{}
+	if len(user.LoginWebAuthn) > 0 {
+		credential := webauthn.Credential{}
+		if err := json.Unmarshal([]byte(user.LoginWebAuthn), &credential); err != nil {
+			log.Printf("Web Authn: Can't parse credential %v\n", err.Error())
+
+			return creadentials
+		}
+		creadentials = append(creadentials, credential)
+	}
+
+	return creadentials
 }

@@ -10,7 +10,9 @@ import (
 
 // UserActivity types
 const (
+	ActivityTypeSignUpWebAuth         = "sugn_up_web_authn"
 	ActivityTypeSignUp                = "sign_up"
+	ActivityTypeSignInWebAuth         = "sugn_in_web_authn"
 	ActivityTypeSignIn                = "sign_in"
 	ActivityTypeSendOtp               = "send_otp"
 	ActivityTypeVerifyOtp             = "verify_otp"

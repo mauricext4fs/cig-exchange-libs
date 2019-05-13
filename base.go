@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/duo-labs/webauthn/webauthn"
 	"github.com/go-redis/redis"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres" // postgresql driver
@@ -14,10 +15,13 @@ import (
 	"github.com/mattbaird/gochimp"
 )
 
-var db *gorm.DB
-var redisD *redis.Client
-var twilioOTP *twilio.OTP
-var mandrillClient *gochimp.MandrillAPI
+var (
+	db             *gorm.DB
+	redisD         *redis.Client
+	twilioOTP      *twilio.OTP
+	web            *webauthn.WebAuthn
+	mandrillClient *gochimp.MandrillAPI
+)
 var isDevEnvironment bool
 
 func init() {
@@ -44,6 +48,22 @@ func init() {
 	mandrillClient, err = gochimp.NewMandrill(mandrillKey)
 	if err != nil {
 		fmt.Print(err)
+	}
+
+	// WebAuthn init
+	displayName := "cig-exchange.ch"
+	rpID := "cig-exchange.ch"
+	// development settings
+	if IsDevEnv() {
+		displayName = "localhost"
+		rpID = "localhost"
+	}
+	web, err = webauthn.New(&webauthn.Config{
+		RPDisplayName: displayName, // Display Name for your site
+		RPID:          rpID,        // Generally the FQDN for your site
+	})
+	if err != nil {
+		fmt.Println(err)
 	}
 
 	// PostgreSQL Init
@@ -106,6 +126,11 @@ func GetTwilio() *twilio.OTP {
 // GetMandrill returns a mandrill object singletone
 func GetMandrill() *gochimp.MandrillAPI {
 	return mandrillClient
+}
+
+// GetWebAuthn returns a web authn object singletone
+func GetWebAuthn() *webauthn.WebAuthn {
+	return web
 }
 
 // IsDevEnv returns true for development environment
