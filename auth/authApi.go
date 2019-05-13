@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -41,9 +40,16 @@ type verificationCodeRequest struct {
 	Code string `json:"code"`
 }
 
+// Constants for JwtResponse status
+const (
+	JWTResponseStatusFinished = "finished"
+	JWTResponseStatusWebAuthn = "web authn needed"
+)
+
 // JwtResponse structure
 type JwtResponse struct {
-	JWT string `json:"jwt"`
+	JWT    string `json:"jwt"`
+	Status string `json:"status"`
 }
 
 type infoResponse struct {
@@ -198,18 +204,6 @@ func (userAPI *UserAPI) JwtAuthenticationHandler(next http.Handler) http.Handler
 			next.ServeHTTP(w, r)
 			return
 		}
-		if strings.HasPrefix(requestPath, "/dist") {
-			next.ServeHTTP(w, r)
-			return
-		}
-		if strings.HasPrefix(requestPath, "/lib") {
-			next.ServeHTTP(w, r)
-			return
-		}
-		if strings.HasPrefix(requestPath, "/src") {
-			next.ServeHTTP(w, r)
-			return
-		}
 
 		tokenHeader := r.Header.Get("Authorization") // Grab the token from the header
 
@@ -323,10 +317,6 @@ func (userAPI *UserAPI) CreateUserHandlerPingdom(w http.ResponseWriter, r *http.
 // CreateUserHandler handles POST api/users/signup endpoint
 func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 
-	(w).Header().Set("Access-Control-Allow-Origin", "*")
-	(w).Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-	(w).Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
-	log.Printf("sign up\n")
 	// create user activity record and print error with defer
 	info := cigExchange.PrepareActivityInformation(r)
 	defer CreateUserActivity(info, models.ActivityTypeSignUp)
@@ -345,7 +335,6 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	log.Printf("%v\n", userReq)
 	// check that we received 'platform' parameter
 	if len(userReq.Platform) == 0 {
 		info.APIError = cigExchange.NewRequiredFieldError([]string{"platform"})
@@ -400,8 +389,6 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 			cigExchange.RespondWithAPIError(w, info.APIError)
 			return
 		}
-		log.Printf("options: %v\n", options)
-		log.Printf("sessionData: %v\n", sessionData)
 
 		// get redis key uuid_web_authn
 		rediskey := cigExchange.GenerateRedisKey(createdUser.ID, cigExchange.KeyWebAuthnRegister)
@@ -827,7 +814,8 @@ func (userAPI *UserAPI) GetUserWebAuthnHandler(w http.ResponseWriter, r *http.Re
 	info.LoggedInUser = loggedInUser
 
 	resp := &JwtResponse{
-		JWT: tokenString,
+		JWT:    tokenString,
+		Status: JWTResponseStatusFinished,
 	}
 	cigExchange.Respond(w, resp)
 	CreateUserActivity(info, models.ActivityTypeSessionLength)
@@ -1000,7 +988,6 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 		}
 		if redisCmd.Val() != reqStruct.Code {
 			info.APIError = secureErrorResponse
-			fmt.Println("VerifyCode: code mismatch, expecting " + redisCmd.Val())
 			cigExchange.RespondWithAPIError(w, secureErrorResponse)
 			return
 		}
@@ -1019,8 +1006,6 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 			cigExchange.RespondWithAPIError(w, info.APIError)
 			return
 		}
-		log.Printf("options: %v\n", options)
-		log.Printf("sessionData: %v\n", sessionData)
 
 		// get redis key uuid_web_authn
 		rediskey := cigExchange.GenerateRedisKey(user.ID, cigExchange.KeyWebAuthnLogin)
@@ -1079,7 +1064,8 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	info.LoggedInUser = loggedInUser
 
 	resp := &JwtResponse{
-		JWT: tokenString,
+		JWT:    tokenString,
+		Status: JWTResponseStatusFinished,
 	}
 	cigExchange.Respond(w, resp)
 	CreateUserActivity(info, models.ActivityTypeSessionLength)
@@ -1240,7 +1226,8 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 			return
 		}
 		resp := &JwtResponse{
-			JWT: splitted[1],
+			JWT:    splitted[1],
+			Status: JWTResponseStatusFinished,
 		}
 		cigExchange.Respond(w, resp)
 		return
@@ -1295,7 +1282,8 @@ func (userAPI *UserAPI) ChangeOrganisationHandler(w http.ResponseWriter, r *http
 	}
 
 	resp := &JwtResponse{
-		JWT: tokenString,
+		JWT:    tokenString,
+		Status: JWTResponseStatusFinished,
 	}
 	cigExchange.Respond(w, resp)
 }
