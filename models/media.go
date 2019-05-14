@@ -176,6 +176,26 @@ func GetMediaForOffering(offeringID string) (media []*MediaWithIndex, apiError *
 	return
 }
 
+// GetOfferingMediaForOffering queries all offering media links for offering
+func GetOfferingMediaForOffering(offeringID string) (offMedia []*OfferingMedia, apiError *cigExchange.APIError) {
+
+	offMedia = make([]*OfferingMedia, 0)
+	// check that UUID is set
+	if len(offeringID) == 0 {
+		apiError = cigExchange.NewInvalidFieldError("offering_id", "Offering id is invalid")
+		return
+	}
+
+	db := cigExchange.GetDB().Where(&OfferingMedia{OfferingID: offeringID}).Find(&offMedia)
+	if db.Error != nil {
+		if !db.RecordNotFound() {
+			return
+		}
+		apiError = cigExchange.NewDatabaseError("Fetch offering media failed", db.Error)
+	}
+	return
+}
+
 // DeleteOfferingMedia deletes media and offering media link
 func DeleteOfferingMedia(mediaID string) *cigExchange.APIError {
 
