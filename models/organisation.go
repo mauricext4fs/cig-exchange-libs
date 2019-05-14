@@ -561,6 +561,7 @@ type OrganisationUserResponse struct {
 	*User
 	UserEmail string     `json:"email"`
 	LastLogin *time.Time `json:"last_login,omitempty"`
+	IsAdmin   bool       `json:"is_admin"`
 }
 
 // GetUsersForOrganisation queries all users for organisation from db
@@ -623,7 +624,12 @@ func GetUsersForOrganisation(organisationID string, invitedUsers bool) (usersRes
 		}
 
 		// fill response struct
-		userResponse := &OrganisationUserResponse{&user, user.LoginEmail.Value1, lastLoginP}
+		userResponse := &OrganisationUserResponse{
+			User:      &user,
+			UserEmail: user.LoginEmail.Value1,
+			LastLogin: lastLoginP,
+			IsAdmin:   orgUser.OrganisationRole == OrganisationRoleAdmin,
+		}
 		// add user to response
 		usersResponse = append(usersResponse, userResponse)
 	}

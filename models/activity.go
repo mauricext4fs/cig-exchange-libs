@@ -38,6 +38,7 @@ const (
 	ActivityTypeDeleteOffering        = "delete_offering"
 	ActivityTypeGetUsers              = "get_users"
 	ActivityTypeAddUser               = "add_user"
+	ActivityTypePatchUser             = "update_org_user"
 	ActivityTypeDeleteUser            = "delete_user"
 	ActivityTypeCreateInvitation      = "create_invitation"
 	ActivityTypeGetInvitations        = "get_invitations"
@@ -53,6 +54,7 @@ const (
 	ActivityTypeGetDashboardClick     = "get_dashboard_click"
 	ActivityTypeGetOfferingsMedia     = "get_offerings_media"
 	ActivityTypeUploadMedia           = "upload_media"
+	ActivityTypeOrderingMedia         = "ordering_media"
 	ActivityTypeUpdateOfferingsMedia  = "update_offerings_media"
 	ActivityTypeDeleteOfferingsMedia  = "delete_offerings_media"
 )
