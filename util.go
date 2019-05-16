@@ -36,9 +36,16 @@ func RandomUUID() string {
 	return UUID.String()
 }
 
-// GenerateRedisKey generates key for storing email auth access code in redis
-func GenerateRedisKey(UUID string) string {
-	return fmt.Sprintf("%s_signup_key", UUID)
+// keys for storing strings in redis
+const (
+	KeySignUp           = "_signup_key"
+	KeyWebAuthnRegister = "_web_authn_register"
+	KeyWebAuthnLogin    = "_web_authn_login"
+)
+
+// GenerateRedisKey generates key for storing strings in redis
+func GenerateRedisKey(UUID, suffix string) string {
+	return fmt.Sprintf("%s%s", UUID, suffix)
 }
 
 // BEGIN SECTION: this api will be deprecated soon
@@ -127,6 +134,19 @@ const (
 	EmailTypePinCode
 	EmailTypeInvitation
 )
+
+// SendWelcomeEmailAsync sends welcome email in goroutine
+func SendWelcomeEmailAsync(email string) {
+	// send welcome email async
+	go func() {
+		parameters := map[string]string{}
+		err := SendEmail(EmailTypeWelcome, email, parameters)
+		if err != nil {
+			fmt.Println("CreateUser: email sending error:")
+			fmt.Println(err.Error())
+		}
+	}()
+}
 
 // SendEmail sends template emails
 func SendEmail(eType emailType, email string, parameters map[string]string) error {
