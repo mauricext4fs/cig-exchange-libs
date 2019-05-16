@@ -61,7 +61,7 @@ func (*User) GetMultilangFields() []string {
 	return []string{}
 }
 
-// UseWebAuthn returns web authn
+// UseWebAuthn returns true is web authn needed
 func (user *User) UseWebAuthn() bool {
 
 	return len(user.LoginWebAuthn) > 0

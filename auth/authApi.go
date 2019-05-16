@@ -42,8 +42,8 @@ type verificationCodeRequest struct {
 
 // Constants for JwtResponse status
 const (
-	JWTResponseStatusFinished = "finished"
-	JWTResponseStatusWebAuthn = "web authn needed"
+	JWTResponseStatusFinished = "success"
+	JWTResponseStatusWebAuthn = "web authn"
 )
 
 // JwtResponse structure
@@ -97,6 +97,7 @@ type organisationRequest struct {
 	PhoneNumber      string `json:"phone_number"`
 	ReferenceKey     string `json:"reference_key"`
 	OrganisationName string `json:"organisation_name"`
+	WebAuthn         bool   `json:"webauthn"`
 }
 
 func (request *organisationRequest) convertRequestToUserAndOrganisation() (*models.User, *models.Organisation) {
@@ -370,57 +371,21 @@ func (userAPI *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// send welcome email async
-	go func() {
-		parameters := map[string]string{}
-		err = cigExchange.SendEmail(cigExchange.EmailTypeWelcome, userReq.Email, parameters)
-		if err != nil {
-			fmt.Println("CreateUser: email sending error:")
-			fmt.Println(err.Error())
-		}
-	}()
-
 	// handle web authn
 	if userReq.WebAuthn {
-		// generate session data and public key
-		options, sessionData, err := cigExchange.GetWebAuthn().BeginRegistration(createdUser)
-		if err != nil {
-			info.APIError = cigExchange.NewRequestDecodingError(err)
+		response, apiError := beginWebAuthnRegistration(createdUser)
+		if apiError != nil {
+			info.APIError = apiError
 			cigExchange.RespondWithAPIError(w, info.APIError)
 			return
 		}
 
-		// get redis key uuid_web_authn
-		rediskey := cigExchange.GenerateRedisKey(createdUser.ID, cigExchange.KeyWebAuthnRegister)
-		expiration := 5 * time.Minute
-
-		// marshal session data for storing in redis
-		session, err := json.Marshal(sessionData)
-		if err != nil {
-			info.APIError = cigExchange.NewRequestDecodingError(err)
-			cigExchange.RespondWithAPIError(w, info.APIError)
-			return
-		}
-
-		redisCmd := cigExchange.GetRedis().Set(rediskey, string(session), expiration)
-		if redisCmd.Err() != nil {
-			info.APIError = cigExchange.NewRedisError("Set web authn failure", redisCmd.Err())
-			cigExchange.RespondWithAPIError(w, info.APIError)
-			return
-		}
-
-		// fill response struct
-		optionsWithID := struct {
-			*protocol.CredentialCreation
-			UUID string `json:"uuid"`
-		}{
-			options,
-			createdUser.ID,
-		}
-
-		cigExchange.Respond(w, optionsWithID)
+		cigExchange.Respond(w, response)
 		return
 	}
+
+	// send welcome email async
+	cigExchange.SendWelcomeEmailAsync(userReq.Email)
 
 	resp.UUID = createdUser.ID
 	cigExchange.Respond(w, resp)
@@ -490,7 +455,47 @@ func (userAPI *UserAPI) CreateUserWebAuthnHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	// send welcome email async
+	if user.LoginEmail != nil && len(user.LoginEmail.Value1) > 0 {
+		cigExchange.SendWelcomeEmailAsync(user.LoginEmail.Value1)
+	}
+
 	w.WriteHeader(204)
+}
+
+type registrationOptions struct {
+	*protocol.CredentialCreation
+	UUID string `json:"uuid"`
+}
+
+func beginWebAuthnRegistration(createdUser *models.User) (*registrationOptions, *cigExchange.APIError) {
+	// generate session data and public key
+	options, sessionData, err := cigExchange.GetWebAuthn().BeginRegistration(createdUser)
+	if err != nil {
+		return nil, cigExchange.NewRequestDecodingError(err)
+	}
+
+	// get redis key uuid_web_authn
+	rediskey := cigExchange.GenerateRedisKey(createdUser.ID, cigExchange.KeyWebAuthnRegister)
+	expiration := 5 * time.Minute
+
+	// marshal session data for storing in redis
+	session, err := json.Marshal(sessionData)
+	if err != nil {
+		return nil, cigExchange.NewRequestDecodingError(err)
+	}
+
+	redisCmd := cigExchange.GetRedis().Set(rediskey, string(session), expiration)
+	if redisCmd.Err() != nil {
+		return nil, cigExchange.NewRedisError("Set web authn failure", redisCmd.Err())
+	}
+
+	// fill response struct
+	optionsWithID := &registrationOptions{
+		options,
+		createdUser.ID,
+	}
+	return optionsWithID, nil
 }
 
 // CreateOrganisationHandler handles POST api/organisations/signup endpoint
@@ -681,15 +686,21 @@ func (userAPI *UserAPI) CreateOrganisationHandler(w http.ResponseWriter, r *http
 		}
 	}
 
-	// send welcome email async
-	go func() {
-		parameters := map[string]string{}
-		err = cigExchange.SendEmail(cigExchange.EmailTypeWelcome, orgRequest.Email, parameters)
-		if err != nil {
-			fmt.Println("CreateOrganisation: email sending error:")
-			fmt.Println(err.Error())
+	// handle web authn
+	if orgRequest.WebAuthn {
+		response, apiError := beginWebAuthnRegistration(existingUser)
+		if apiError != nil {
+			info.APIError = apiError
+			cigExchange.RespondWithAPIError(w, info.APIError)
+			return
 		}
-	}()
+
+		cigExchange.Respond(w, response)
+		return
+	}
+
+	// send welcome email async
+	cigExchange.SendWelcomeEmailAsync(orgRequest.Email)
 
 	resp.UUID = existingUser.ID
 	cigExchange.Respond(w, resp)
@@ -789,7 +800,7 @@ func (userAPI *UserAPI) GetUserWebAuthnHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	organisationUser, apiError := verifyOrganisationUserAndReturnHome(user)
+	organisationUser, apiError := selectHomeOrganisation(user)
 	if apiError != nil {
 		info.APIError = apiError
 		cigExchange.RespondWithAPIError(w, info.APIError)
@@ -850,7 +861,7 @@ func (userAPI *UserAPI) SendCodeHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// check that we received 'type' parameter
+	// check 'type' field
 	if len(reqStruct.Type) == 0 {
 		info.APIError = cigExchange.NewRequiredFieldError([]string{"type"})
 		cigExchange.RespondWithAPIError(w, info.APIError)
@@ -1032,14 +1043,14 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 			Status string `json:"status"`
 		}{
 			options,
-			"Web Authn",
+			JWTResponseStatusWebAuthn,
 		}
 
 		cigExchange.Respond(w, webAuthResponse)
 		return
 	}
 
-	organisationUser, apiError := verifyOrganisationUserAndReturnHome(user)
+	organisationUser, apiError := selectHomeOrganisation(user)
 	if apiError != nil {
 		info.APIError = apiError
 		cigExchange.RespondWithAPIError(w, info.APIError)
@@ -1071,7 +1082,7 @@ func (userAPI *UserAPI) VerifyCodeHandler(w http.ResponseWriter, r *http.Request
 	CreateUserActivity(info, models.ActivityTypeSessionLength)
 }
 
-func verifyOrganisationUserAndReturnHome(user *models.User) (*models.OrganisationUser, *cigExchange.APIError) {
+func selectHomeOrganisation(user *models.User) (*models.OrganisationUser, *cigExchange.APIError) {
 
 	// get OrganisationUsers related to user
 	organisationUser := &models.OrganisationUser{}

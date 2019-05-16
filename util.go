@@ -135,6 +135,19 @@ const (
 	EmailTypeInvitation
 )
 
+// SendWelcomeEmailAsync sends welcome email in goroutine
+func SendWelcomeEmailAsync(email string) {
+	// send welcome email async
+	go func() {
+		parameters := map[string]string{}
+		err := SendEmail(EmailTypeWelcome, email, parameters)
+		if err != nil {
+			fmt.Println("CreateUser: email sending error:")
+			fmt.Println(err.Error())
+		}
+	}()
+}
+
 // SendEmail sends template emails
 func SendEmail(eType emailType, email string, parameters map[string]string) error {
 
